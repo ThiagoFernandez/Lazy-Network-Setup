@@ -5,96 +5,257 @@ import auxiliar
 # ============================================================
 # FIELD DEFINITIONS
 # ============================================================
-#
-# Cada campo se define UNA sola vez.
-#
-# Las secciones y los tipos de dispositivo solamente hacen
-# referencia a estos nombres.
-#
-# Si mañana cambiamos el texto de "banner", lo cambiamos acá
-# una sola vez.
-#
-
 
 FIELD_DEFINITIONS = {
 
-    # -------------------------
-    # Common Cisco fields
-    # -------------------------
+    # --------------------------------------------------------
+    # HOSTNAME
+    # --------------------------------------------------------
 
     "hostname": {
         "question": "Write the hostname",
-        "validator": auxiliar.validate_hostname
+        "validator": auxiliar.validate_hostname,
+
+        "mode": "global_config",
+
+        "render": "value",
+        "descriptor": "hostname"
     },
+
+
+    # --------------------------------------------------------
+    # PASSWORD ENCRYPTION
+    # --------------------------------------------------------
 
     "password_encryption": {
         "question": "Enable service password-encryption?",
-        "validator": auxiliar.validate_yes_no
+        "validator": auxiliar.validate_yes_no,
+
+        "mode": "global_config",
+
+        "render": "boolean_enable_disable",
+        "descriptor": "service password-encryption"
     },
+
+
+    # --------------------------------------------------------
+    # BANNER
+    # --------------------------------------------------------
 
     "banner": {
         "question": "Write the banner",
-        "validator": auxiliar.validate_optional_string
+        "validator": auxiliar.validate_optional_string,
+
+        "mode": "global_config",
+
+        "render": "delimited",
+        "descriptor": "banner motd"
     },
+
+
+    # --------------------------------------------------------
+    # DNS LOOKUP
+    # --------------------------------------------------------
 
     "dns_lookup": {
         "question": (
             "Enable DNS lookup? "
             "(yes = the device performs DNS lookups)"
         ),
-        "validator": auxiliar.validate_yes_no
+        "validator": auxiliar.validate_yes_no,
+
+        "mode": "global_config",
+
+        "render": "boolean_enable_disable",
+        "descriptor": "ip domain-lookup"
     },
+
+
+    # --------------------------------------------------------
+    # CONSOLE PASSWORD
+    # --------------------------------------------------------
 
     "console_password": {
         "question": "Write the console password",
-        "validator": auxiliar.validate_optional_string
+        "validator": auxiliar.validate_optional_string,
+
+        "mode": "line_console",
+
+        "render": "multiple",
+
+        "commands": [
+            "password {value}",
+            "login"
+        ]
     },
+
+
+    # --------------------------------------------------------
+    # VTY PASSWORD
+    # --------------------------------------------------------
 
     "vty_password": {
         "question": "Write the VTY password",
-        "validator": auxiliar.validate_optional_string
+        "validator": auxiliar.validate_optional_string,
+
+        "mode": "line_vty",
+
+        "render": "multiple",
+
+        "commands": [
+            "password {value}",
+            "login"
+        ]
     },
+
+
+    # --------------------------------------------------------
+    # PRIVILEGE PASSWORD
+    # --------------------------------------------------------
 
     "privilege_password": {
         "question": "Write the privilege password",
-        "validator": auxiliar.validate_optional_string
+        "validator": auxiliar.validate_optional_string,
+
+        "mode": "global_config",
+
+        "render": "value",
+        "descriptor": "enable secret"
     },
 
 
-    # -------------------------
-    # Network fields
-    # -------------------------
-
-    "ip": {
-        "question": "Write the IP address",
-        "validator": auxiliar.validate_ip
-    },
-
-    "mask": {
-        "question": "Write the subnet mask",
-        "validator": auxiliar.validate_ip
-    },
+    # --------------------------------------------------------
+    # GATEWAY
+    # --------------------------------------------------------
 
     "gateway": {
         "question": "Write the default gateway",
-        "validator": auxiliar.validate_ip
+        "validator": auxiliar.validate_ip,
+
+        "mode": "global_config",
+
+        "render": "value",
+        "descriptor": "ip default-gateway"
     },
+
+
+    # --------------------------------------------------------
+    # PC IP
+    # --------------------------------------------------------
+
+    "ip": {
+        "question": "Write the IP address",
+        "validator": auxiliar.validate_ip,
+
+        "mode": None,
+        "render": None
+    },
+
+
+    # --------------------------------------------------------
+    # PC MASK
+    # --------------------------------------------------------
+
+    "mask": {
+        "question": "Write the subnet mask",
+        "validator": auxiliar.validate_ip,
+
+        "mode": None,
+        "render": None
+    },
+
+
+    # --------------------------------------------------------
+    # PC DNS
+    # --------------------------------------------------------
 
     "dns": {
         "question": "Write the DNS server",
-        "validator": auxiliar.validate_ip
+        "validator": auxiliar.validate_ip,
+
+        "mode": None,
+        "render": None
     }
+}
+
+
+# ============================================================
+# RENDERERS
+# ============================================================
+
+def render_value(field, value):
+
+    descriptor = field["descriptor"]
+
+    return [
+        f"{descriptor} {value}"
+    ]
+
+
+def render_boolean_enable_disable(field, value):
+
+    if value is None:
+        return []
+
+    if value is True:
+        return [
+            field["descriptor"]
+        ]
+
+    return [
+        f"no {field['descriptor']}"
+    ]
+
+
+def render_delimited(field, value):
+
+    if value is None:
+        return []
+
+    descriptor = field["descriptor"]
+
+    return [
+        f"{descriptor} #{value}#"
+    ]
+
+
+def render_multiple(field, value):
+
+    if value is None:
+        return []
+
+    commands = []
+
+    for command in field["commands"]:
+        commands.append(
+            command.format(value=value)
+        )
+
+    return commands
+
+
+# ============================================================
+# RENDER DISPATCH
+# ============================================================
+
+RENDER_FUNCTIONS = {
+
+    "value": render_value,
+
+    "boolean_enable_disable":
+        render_boolean_enable_disable,
+
+    "delimited":
+        render_delimited,
+
+    "multiple":
+        render_multiple
 }
 
 
 # ============================================================
 # SECTION DEFINITIONS
 # ============================================================
-#
-# Las secciones NO contienen descriptores repetidos.
-# Solamente dicen qué campos pertenecen a cada sección.
-#
-
 
 SECTION_FIELDS = {
 
@@ -153,14 +314,8 @@ SECTION_FIELDS = {
 
 
 # ============================================================
-# DEVICE TYPES
+# DEVICE SECTIONS
 # ============================================================
-#
-# Esto define qué secciones tiene cada tipo.
-#
-# No usamos "if type == pc / else".
-#
-
 
 DEVICE_SECTIONS = {
 
@@ -185,13 +340,6 @@ DEVICE_SECTIONS = {
 # ============================================================
 # DEVICE CREATION
 # ============================================================
-#
-# El device se construye a partir de SECTION_FIELDS.
-#
-# Ya NO existe una lista manual de keys en crear_switch(),
-# crear_router() o crear_pc().
-#
-
 
 def crear_device(device_type):
 
@@ -199,13 +347,10 @@ def crear_device(device_type):
         "type": device_type
     }
 
-    sections = DEVICE_SECTIONS[device_type]
+    for section in DEVICE_SECTIONS[device_type]:
 
-    for section in sections:
+        for field in SECTION_FIELDS[section][device_type]:
 
-        fields = SECTION_FIELDS[section][device_type]
-
-        for field in fields:
             device[field] = None
 
     return device
@@ -224,35 +369,21 @@ def crear_pc():
 
 
 # ============================================================
-# GET SECTION FIELDS
+# SECTION FIELDS
 # ============================================================
 
 def get_section_fields(device, section):
 
-    device_type = device["type"]
-
-    return SECTION_FIELDS[section][device_type]
+    return SECTION_FIELDS[
+        section
+    ][
+        device["type"]
+    ]
 
 
 # ============================================================
 # SETUP SECTION
 # ============================================================
-#
-# Una sección trabaja sobre una copia.
-#
-# SKIP:
-#     no modifica el campo.
-#
-# CANCEL:
-#     descarta TODA la copia.
-#
-# Valor:
-#     modifica la copia.
-#
-# Al terminar:
-#     devuelve la copia para hacer commit.
-#
-
 
 def setup_section(device, section):
 
@@ -263,70 +394,78 @@ def setup_section(device, section):
         section
     )
 
-    for field in fields:
+    for field_name in fields:
 
-        definition = FIELD_DEFINITIONS[field]
+        field = FIELD_DEFINITIONS[field_name]
 
-        question = definition["question"]
-        validator = definition["validator"]
-
-        current = temp_device[field]
+        validator = field["validator"]
 
         result = validator(
-            question,
-            current
+            field["question"],
+            temp_device[field_name]
         )
 
-        # -------------------------
-        # Cancel entire section
-        # -------------------------
+
+        # ----------------------------------------------------
+        # CANCEL
+        # ----------------------------------------------------
 
         if result is auxiliar.CANCEL:
             return auxiliar.CANCEL
 
-        # -------------------------
-        # Keep current value
-        # -------------------------
+
+        # ----------------------------------------------------
+        # SKIP
+        # ----------------------------------------------------
 
         if result is auxiliar.SKIP:
             continue
 
-        # -------------------------
-        # Set new value
-        # -------------------------
 
-        temp_device[field] = result
+        # ----------------------------------------------------
+        # TEMPORARY VALUE
+        # ----------------------------------------------------
+
+        temp_device[field_name] = result
+
 
     return temp_device
 
 
 # ============================================================
-# SECTION SETUPS
+# SECTION FUNCTIONS
 # ============================================================
 
 def basic_setup(device):
-    return setup_section(device, "basic")
+
+    return setup_section(
+        device,
+        "basic"
+    )
 
 
 def security_setup(device):
-    return setup_section(device, "security")
+
+    return setup_section(
+        device,
+        "security"
+    )
 
 
 def interfaces_setup(device):
-    return setup_section(device, "interfaces")
+
+    return setup_section(
+        device,
+        "interfaces"
+    )
 
 
 # ============================================================
 # SECTION DISPATCH
 # ============================================================
-#
-# No hay case 1 / case 2 / case 3.
-#
-# La relación "opción -> función" está en este diccionario.
-#
-
 
 SECTION_SETUP_FUNCTIONS = {
+
     "basic": basic_setup,
     "security": security_setup,
     "interfaces": interfaces_setup
@@ -334,30 +473,160 @@ SECTION_SETUP_FUNCTIONS = {
 
 
 # ============================================================
-# CHOOSE DEVICE
+# RENDER FIELD
 # ============================================================
 
-def choose_device():
+def render_field(field_name, value):
 
-    devices = [
-        "pc",
-        "switch",
-        "router"
+    if value is None:
+        return []
+
+    field = FIELD_DEFINITIONS[field_name]
+
+    render_type = field["render"]
+
+    if render_type is None:
+        return []
+
+    render_function = RENDER_FUNCTIONS[
+        render_type
     ]
 
-    while True:
+    return render_function(
+        field,
+        value
+    )
 
-        auxiliar.show_options(devices)
 
-        result = auxiliar.validate_number(devices)
+# ============================================================
+# BUILD PLAN
+# ============================================================
+#
+# Esta función NO imprime.
+#
+# Devuelve:
+#
+# {
+#     "global_config": [
+#         ...
+#     ],
+#
+#     "line_console": [
+#         ...
+#     ],
+#
+#     "line_vty": [
+#         ...
+#     ]
+# }
+#
+# ============================================================
 
-        if result == -1:
-            return None
+def build_plan(device):
 
-        device_type = devices[result - 1]
+    plan = {}
 
-        return crear_device(device_type)
+    for field_name, value in device.items():
 
+        if field_name == "type":
+            continue
+
+        if value is None:
+            continue
+
+        field = FIELD_DEFINITIONS[field_name]
+
+        mode = field["mode"]
+
+        if mode is None:
+            continue
+
+        commands = render_field(
+            field_name,
+            value
+        )
+
+        if not commands:
+            continue
+
+        if mode not in plan:
+            plan[mode] = []
+
+        plan[mode].extend(commands)
+
+    return plan
+
+
+# ============================================================
+# MODE COMMANDS
+# ============================================================
+#
+# Estos son los comandos que se usan para entrar a cada
+# contexto de configuración.
+#
+# ============================================================
+
+MODE_COMMANDS = {
+
+    "global_config": {
+        "enter": "configure terminal",
+        "parent": None
+    },
+
+    "line_console": {
+        "enter": "line console 0",
+        "parent": "global_config"
+    },
+
+    "line_vty": {
+        "enter": "line vty 0 15",
+        "parent": "global_config"
+    }
+}
+
+
+# ============================================================
+# PRINT PLAN
+# ============================================================
+INDENT = 1
+
+def print_plan(plan):
+    print()
+    print("-" * 60)
+    print("IOS CONFIGURATION PLAN")
+    print("-" * 60)
+
+    print("enable")
+
+    for mode, commands in plan.items():
+
+        # Calcular profundidad del modo
+        depth = 1
+        current = mode
+
+        while MODE_COMMANDS[current]["parent"] is not None:
+            depth += 1
+            current = MODE_COMMANDS[current]["parent"]
+
+        # El comando que entra al modo queda en su profundidad
+        father_indent = " " * (depth * INDENT)
+
+        # Los comandos dentro del modo quedan un nivel más abajo
+        child_indent = " " * ((depth + 1) * INDENT)
+
+        print(f'{father_indent}{MODE_COMMANDS[mode]["enter"]}')
+
+        for command in commands:
+            print(f"{child_indent}{command}")
+
+        if depth >0:
+            print(f"{child_indent}exit")
+
+    print("end")
+    print("write memory")
+
+    print("-" * 60)
+    print()
 
 # ============================================================
 # SHOW DEVICE
@@ -378,12 +647,46 @@ def show_device(device):
             continue
 
         if value is None:
-            print(f"{field}: not configured")
+            print(
+                f"{field}: not configured"
+            )
         else:
-            print(f"{field}: {value}")
+            print(
+                f"{field}: {value}"
+            )
 
     print("-" * 60)
     print()
+
+
+# ============================================================
+# CHOOSE DEVICE
+# ============================================================
+
+def choose_device():
+
+    devices = [
+        "pc",
+        "switch",
+        "router"
+    ]
+
+    while True:
+
+        auxiliar.show_options(
+            devices
+        )
+
+        result = auxiliar.validate_number(
+            devices
+        )
+
+        if result == -1:
+            return None
+
+        return crear_device(
+            devices[result - 1]
+        )
 
 
 # ============================================================
@@ -392,7 +695,9 @@ def show_device(device):
 
 def categories_setup():
 
-    auxiliar.greeting_text("Categories Setup")
+    auxiliar.greeting_text(
+        "Categories Setup"
+    )
 
     device = choose_device()
 
@@ -400,71 +705,83 @@ def categories_setup():
         return
 
 
-    # ---------------------------------
-    # Only sections available for
-    # this device type
-    # ---------------------------------
-
-    sections = DEVICE_SECTIONS[device["type"]]
+    sections = DEVICE_SECTIONS[
+        device["type"]
+    ]
 
 
     while True:
 
         print()
-        print(f"Device type: {device['type']}")
+        print(
+            f"Device type: {device['type']}"
+        )
 
-        auxiliar.show_options(sections)
+        auxiliar.show_options(
+            sections
+        )
 
-        result = auxiliar.validate_number(sections)
+        result = auxiliar.validate_number(
+            sections
+        )
 
         if result == -1:
             return
 
 
-        # ---------------------------------
-        # Convert menu position into
-        # section name
-        # ---------------------------------
+        section = sections[
+            result - 1
+        ]
 
-        section = sections[result - 1]
-
-
-        # ---------------------------------
-        # Find function
-        # ---------------------------------
-
-        setup_function = SECTION_SETUP_FUNCTIONS[section]
+        setup_function = SECTION_SETUP_FUNCTIONS[
+            section
+        ]
 
 
-        # ---------------------------------
-        # Execute section
-        # ---------------------------------
+        new_device = setup_function(
+            device
+        )
 
-        new_device = setup_function(device)
-
-
-        # ---------------------------------
-        # Cancel
-        # ---------------------------------
 
         if new_device is auxiliar.CANCEL:
 
             print()
-            print(f"{section.capitalize()} setup cancelled.")
+            print(
+                f"{section.capitalize()} "
+                "setup cancelled."
+            )
 
             continue
 
 
-        # ---------------------------------
-        # Commit
-        # ---------------------------------
-
         device = new_device
 
+
         print()
-        print(f"{section.capitalize()} setup completed.")
+        print(
+            f"{section.capitalize()} "
+            "setup completed."
+        )
 
         show_device(device)
+
+
+        # ----------------------------------------------------
+        # BUILD PLAN
+        # ----------------------------------------------------
+
+        plan = build_plan(
+            device
+        )
+
+
+        # ----------------------------------------------------
+        # PRINT PLAN
+        # ----------------------------------------------------
+
+        print_plan(
+            plan
+        )
 
 
 # ============================================================
@@ -473,9 +790,10 @@ def categories_setup():
 
 def guided_setup():
 
-    auxiliar.greeting_text("Guided Setup")
+    auxiliar.greeting_text(
+        "Guided Setup"
+    )
 
-    # Todavía no implementado.
     pass
 
 
@@ -485,7 +803,9 @@ def guided_setup():
 
 def show_main_menu():
 
-    auxiliar.greeting_text("LAZY NETWORK SETUP")
+    auxiliar.greeting_text(
+        "LAZY NETWORK SETUP"
+    )
 
     options = [
         "Guided Setup",
@@ -494,28 +814,40 @@ def show_main_menu():
 
 
     MAIN_MENU_FUNCTIONS = {
-        "Guided Setup": guided_setup,
-        "Categories Setup": categories_setup
+
+        "Guided Setup":
+            guided_setup,
+
+        "Categories Setup":
+            categories_setup
     }
 
 
     while True:
 
-        print(f"{' Welcome to the main menu ':-^60}")
+        print(
+            f"{' Welcome to the main menu ':-^60}"
+        )
 
-        auxiliar.show_options(options)
+        auxiliar.show_options(
+            options
+        )
 
-        result = auxiliar.validate_number(options)
+        result = auxiliar.validate_number(
+            options
+        )
 
         if result == -1:
             return
 
 
-        option = options[result - 1]
+        option = options[
+            result - 1
+        ]
 
-        function = MAIN_MENU_FUNCTIONS[option]
-
-        function()
+        MAIN_MENU_FUNCTIONS[
+            option
+        ]()
 
 
 # ============================================================
@@ -523,6 +855,7 @@ def show_main_menu():
 # ============================================================
 
 def main():
+
     show_main_menu()
 
 
