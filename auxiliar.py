@@ -49,6 +49,35 @@ def validate_number(options):
         except ValueError:
             print("Please enter a number.")
 
+# =========================
+# Number validation v2
+# =========================
+
+def validate_number_v2(message, current=None):
+    while True:
+        if current is None:
+            prompt = message
+        else:
+            prompt = f"{message} [{current}]"
+        value = input(
+            f"{prompt} "
+            "(skip = keep current, cancel = abort): "
+        ).strip()
+        if value.lower() == "cancel":
+            return CANCEL
+        if value.lower() == "skip":
+            return SKIP
+        try:
+            result = int(value)
+
+            if 16>=result>=0:
+                return result
+
+            print("Invalid option.")
+
+        except ValueError:
+            print("Please enter a number.")
+
 
 # =========================
 # Optional string
@@ -124,6 +153,87 @@ def validate_hostname(message, current=None):
             continue
 
         return value
+
+def validate_no_spaces(question, current):
+
+    while True:
+
+        if current is None:
+            prompt = (
+                f"{question} "
+                "(skip = keep current, cancel = abort): "
+            )
+        else:
+            prompt = (
+                f"{question} [{current}] "
+                "(skip = keep current, cancel = abort): "
+            )
+
+        value = input(prompt).strip()
+
+        if value.lower() == "cancel":
+            return CANCEL
+
+        if value.lower() == "skip":
+            return SKIP
+
+        if " " in value:
+            print("Value cannot contain spaces.")
+            continue
+
+        if value == "":
+            print("Value cannot be empty.")
+            continue
+
+        return value
+
+# =========================
+# USERNAME-SECRET
+# =========================
+
+def validate_username(question, current):
+
+    if current is None:
+        current_user = None
+        current_secret = None
+    else:
+        current_user = current["user"]
+        current_secret = current["secret"]
+
+    # --------------------------------------------------------
+    # USERNAME
+    # --------------------------------------------------------
+
+    user = validate_no_spaces(
+        "Write the username",
+        current_user
+    )
+
+    if user is CANCEL:
+        return CANCEL
+
+    if user is SKIP:
+        return SKIP
+
+    # --------------------------------------------------------
+    # SECRET
+    # --------------------------------------------------------
+
+    secret = validate_no_spaces(
+        "Write the secret",
+        current_secret
+    )
+
+    if secret is CANCEL:
+        return CANCEL
+
+    if secret is SKIP:
+        return SKIP
+
+    return {
+        "user": user,
+        "secret": secret
+    }
 
 
 # =========================

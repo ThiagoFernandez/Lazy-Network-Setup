@@ -140,6 +140,137 @@ FIELD_DEFINITIONS = {
 
 
     # --------------------------------------------------------
+    # DOMAIN-NAME
+    # --------------------------------------------------------
+
+    "domain_name": {
+        "question": "Write the domain name",
+        "validator": auxiliar.validate_optional_string,
+
+        "mode": "global_config",
+
+        "render": "value",
+        "descriptor": "ip domain-name"
+    },
+
+
+    # --------------------------------------------------------
+    # CRYPTO-KEY
+    # --------------------------------------------------------
+
+    "crypto_key": { # este es complejo
+        "question": (
+            "Enable crypto key? "
+        ),
+        "validator": auxiliar.validate_yes_no,
+
+        "mode": "global_config",
+
+        "render": "boolean_enable",
+        "descriptor": "crypto key generate rsa\n  1024" # I had to fix ts in a future cuz ts could lead to indentation bugs
+    },
+
+
+    # --------------------------------------------------------
+    # USERNAME
+    # --------------------------------------------------------
+
+    "username": {
+        "question": "Configure username",
+        "validator": auxiliar.validate_username,
+
+        "mode": "global_config",
+
+        "render": "username",
+
+        "command": "username {user} privilege 15 secret {secret}"
+    },
+
+
+    # --------------------------------------------------------
+    # SSH-VERSION
+    # --------------------------------------------------------
+
+    "ssh_version": {
+        "question": (
+            "Enable ssh version 2?"
+            "(yes = the device force ssh version 2)"
+        ),
+        "validator": auxiliar.validate_yes_no,
+
+        "mode": "global_config",
+
+        "render": "boolean_enable_disable",
+        "descriptor": "ip ssh version 2"
+    },
+
+    # --------------------------------------------------------
+    # MIN-LENGTH
+    # --------------------------------------------------------
+
+    "min_length": {
+        "question": "Write the minimun length of the password",
+        "validator": auxiliar.validate_number_v2,
+
+        "mode": "global_config",
+
+        "render": "value",
+        "descriptor": "security passwords min-length"
+    },
+
+
+    # --------------------------------------------------------
+    # LOGIN-BLOCK
+    # --------------------------------------------------------
+
+    "login_block": { # este tambien es complejo porque pide tiempo e intentos y en cuanto
+        "question": (
+            "Setup your login block?"
+        ),
+        "validator": auxiliar.validate_yes_no,
+
+        "mode": "global_config",
+
+        "render": "",
+        "descriptor": "login block-for 30 attempts 2 within 120"
+    },
+
+
+    # --------------------------------------------------------
+    # TRANSPORT-INPUT
+    # --------------------------------------------------------
+
+    "transport_input": {
+        "question": (
+            "Write the transport input method"
+            "(ssh, telnet or both)"
+        ),
+        "validator": auxiliar.validate_optional_string,
+
+        "mode": "line_vty",
+
+        "render": "value",
+        "descriptor": "transport input"
+    },
+
+    # --------------------------------------------------------
+    # LOGIN-LOCAL
+    # --------------------------------------------------------
+
+    "login_local": {
+        "question": (
+            "Enable the login local?"
+            "(yes= )"
+        ),
+        "validator": auxiliar.validate_yes_no,
+
+        "mode": "line_vty",
+
+        "render": "boolean_enable_disable",
+        "descriptor": "login local"
+    },
+
+    # --------------------------------------------------------
     # PC IP
     # --------------------------------------------------------
 
@@ -193,7 +324,6 @@ def render_value(field, value):
 
 
 def render_boolean_enable_disable(field, value):
-
     if value is None:
         return []
 
@@ -206,6 +336,13 @@ def render_boolean_enable_disable(field, value):
         f"no {field['descriptor']}"
     ]
 
+def render_boolean_enable(field, value):
+    if value is None or value is False:
+        return []
+    else:
+        return [
+            field["descriptor"]
+        ]
 
 def render_delimited(field, value):
 
@@ -218,6 +355,17 @@ def render_delimited(field, value):
         f"{descriptor} #{value}#"
     ]
 
+def render_username(field, value):
+
+    if value is None:
+        return []
+
+    return [
+        field["command"].format(
+            user=value["user"],
+            secret=value["secret"]
+        )
+    ]
 
 def render_multiple(field, value):
 
@@ -249,7 +397,13 @@ RENDER_FUNCTIONS = {
         render_delimited,
 
     "multiple":
-        render_multiple
+        render_multiple,
+
+    "boolean_enable":
+        render_boolean_enable,
+
+    "username":
+        render_username
 }
 
 
@@ -285,6 +439,7 @@ SECTION_FIELDS = {
             "password_encryption",
             "banner",
             "dns_lookup",
+            "min_length",
             "console_password",
             "vty_password",
             "privilege_password"
@@ -296,7 +451,14 @@ SECTION_FIELDS = {
 
         "pc": [],
 
-        "switch": [],
+        "switch": [
+            "username",
+            "domain_name",
+            "crypto_key",
+            "ssh_version",
+            "login_local",
+            "transport_input"
+        ],
 
         "router": []
     },
@@ -568,9 +730,14 @@ def build_plan(device):
 
 MODE_COMMANDS = {
 
+    "privileged_exec": {
+        "enter": "enable",
+        "parent": None
+    },
+
     "global_config": {
         "enter": "configure terminal",
-        "parent": None
+        "parent": "privileged_exec"
     },
 
     "line_console": {
@@ -588,30 +755,46 @@ MODE_COMMANDS = {
 # ============================================================
 # PRINT PLAN
 # ============================================================
+
 INDENT = 1
 
+def calcular_profundidad(mode):
+    depth = 0
+    current = mode
+
+    while MODE_COMMANDS[current]["parent"] is not None:
+        depth += 1
+        current = MODE_COMMANDS[current]["parent"]
+
+    return depth
+
 def print_plan(plan):
+
     print()
     print("-" * 60)
     print("IOS CONFIGURATION PLAN")
     print("-" * 60)
 
-    print("enable")
+    print(MODE_COMMANDS["privileged_exec"]["enter"])
+
+    current_mode = "privileged_exec"
 
     for mode, commands in plan.items():
 
-        # Calcular profundidad del modo
-        depth = 1
-        current = mode
+        depth = calcular_profundidad(mode)
 
-        while MODE_COMMANDS[current]["parent"] is not None:
-            depth += 1
-            current = MODE_COMMANDS[current]["parent"]
+        target_parent = MODE_COMMANDS[mode]["parent"]
+        node = current_mode
 
-        # El comando que entra al modo queda en su profundidad
+        while node != target_parent:
+
+            depth_current = calcular_profundidad(node)
+
+            print(f'{" " * ((depth_current + 1) * INDENT)}exit')
+
+            node = MODE_COMMANDS[node]["parent"]
+
         father_indent = " " * (depth * INDENT)
-
-        # Los comandos dentro del modo quedan un nivel más abajo
         child_indent = " " * ((depth + 1) * INDENT)
 
         print(f'{father_indent}{MODE_COMMANDS[mode]["enter"]}')
@@ -619,15 +802,13 @@ def print_plan(plan):
         for command in commands:
             print(f"{child_indent}{command}")
 
-        if depth >0:
-            print(f"{child_indent}exit")
+        current_mode = mode
 
-    print("end")
-    print("write memory")
+    print(f'{" " * (2 * INDENT)}end')
+    print(f'{" " * INDENT}write memory')
 
     print("-" * 60)
     print()
-
 # ============================================================
 # SHOW DEVICE
 # ============================================================
