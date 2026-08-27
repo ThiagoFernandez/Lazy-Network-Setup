@@ -242,10 +242,9 @@ FIELD_DEFINITIONS = {
 
     "transport_input": {
         "question": (
-            "Write the transport input method"
-            "(ssh, telnet or both)"
+            "Choose the transport input method"
         ),
-        "validator": auxiliar.validate_optional_string,
+        "validator": auxiliar.validate_transport,
 
         "mode": "line_vty",
 
@@ -460,7 +459,14 @@ SECTION_FIELDS = {
             "transport_input"
         ],
 
-        "router": []
+        "router": [
+            "username",
+            "domain_name",
+            "crypto_key",
+            "ssh_version",
+            "login_local",
+            "transport_input"
+        ]
     },
 
 
@@ -516,18 +522,6 @@ def crear_device(device_type):
             device[field] = None
 
     return device
-
-
-def crear_switch():
-    return crear_device("switch")
-
-
-def crear_router():
-    return crear_device("router")
-
-
-def crear_pc():
-    return crear_device("pc")
 
 
 # ============================================================
@@ -758,7 +752,7 @@ MODE_COMMANDS = {
 
 INDENT = 1
 
-def calcular_profundidad(mode):
+def get_depth(mode):
     depth = 0
     current = mode
 
@@ -781,14 +775,14 @@ def print_plan(plan):
 
     for mode, commands in plan.items():
 
-        depth = calcular_profundidad(mode)
+        depth = get_depth(mode)
 
         target_parent = MODE_COMMANDS[mode]["parent"]
         node = current_mode
 
         while node != target_parent:
 
-            depth_current = calcular_profundidad(node)
+            depth_current = get_depth(node)
 
             print(f'{" " * ((depth_current + 1) * INDENT)}exit')
 
@@ -852,22 +846,20 @@ def choose_device():
         "router"
     ]
 
-    while True:
+    auxiliar.show_options(
+        devices
+    )
 
-        auxiliar.show_options(
-            devices
-        )
+    result = auxiliar.validate_number(
+        devices
+    )
 
-        result = auxiliar.validate_number(
-            devices
-        )
+    if result == -1:
+        return None
 
-        if result == -1:
-            return None
-
-        return crear_device(
-            devices[result - 1]
-        )
+    return crear_device(
+        devices[result - 1]
+    )
 
 
 # ============================================================

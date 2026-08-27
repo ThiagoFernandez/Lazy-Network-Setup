@@ -108,6 +108,47 @@ def validate_optional_string(message, current=None):
 
         print("The value cannot be empty.")
 
+# =========================
+# transport
+# =========================
+
+def validate_transport(question, current=None):
+
+    options = [
+        "ssh",
+        "telnet",
+        "both"
+    ]
+
+    while True:
+
+        if current is None:
+            prompt = question
+        else:
+            prompt = f"{question} [{current}]"
+
+        value = input(
+            f"{prompt} "
+            "(skip = keep current, cancel = abort): "
+        ).strip().lower()
+
+        if value == "cancel":
+            return CANCEL
+
+        if value == "skip":
+            return SKIP
+
+        if value in options:
+
+            if value == "both":
+                return "ssh telnet"
+
+            return value
+
+        print(
+            "Invalid option. "
+            "Choose ssh, telnet or both."
+        )
 
 # =========================
 # Hostname
