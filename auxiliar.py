@@ -117,8 +117,18 @@ def validate_transport(question, current=None):
     options = [
         "ssh",
         "telnet",
-        "both"
+        "rlogin",
+        "lat",
+        "mop",
+        "nasi",
+        "pad",
+        "udptn",
+        "v120",
+        "acercon",
+        "all",
+        "none"
     ]
+    method = ""
 
     while True:
 
@@ -127,28 +137,45 @@ def validate_transport(question, current=None):
         else:
             prompt = f"{question} [{current}]"
 
-        value = input(
-            f"{prompt} "
-            "(skip = keep current, cancel = abort): "
-        ).strip().lower()
+        print()
+        print(prompt)
 
-        if value == "cancel":
-            return CANCEL
+        for i, option in enumerate(options, start=1):
+            print(f"{i}. {option}")
 
-        if value == "skip":
-            return SKIP
+        skip_option = len(options) + 1
+        cancel_option = len(options) + 2
+        finish_option = len(options) + 3
 
-        if value in options:
+        print(f"{skip_option}. skip")
+        print(f"{cancel_option}. cancel")
+        if method != "":
+            print(f"{finish_option}. finish")
 
-            if value == "both":
-                return "ssh telnet"
 
-            return value
+        try:
+            result = int(input("Choose an option: "))
 
-        print(
-            "Invalid option. "
-            "Choose ssh, telnet or both."
-        )
+            if 1 <= result <= len(options):
+                method += options[result - 1] + " "
+                options.pop(result - 1)
+                continue
+
+            if result == skip_option:
+                return SKIP
+
+            if result == cancel_option:
+                return CANCEL
+
+            if result == finish_option:
+                if not method:
+                    return SKIP
+                return method.strip()
+
+            print("Invalid option.")
+
+        except ValueError:
+            print("Please enter a number.")
 
 # =========================
 # Hostname

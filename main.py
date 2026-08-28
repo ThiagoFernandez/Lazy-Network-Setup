@@ -1,5 +1,110 @@
 import copy
 import auxiliar
+import pyperclip
+import os
+
+OUTPUT_DIR = "configs"
+
+INDENT = 1
+
+# ============================================================
+# CONFIG FILE
+# ============================================================
+
+CONFIG_FILE_MODES = {
+    "global_config": None,
+    "line_console": "line con 0",
+    "line_vty":     "line vty 0 15"
+}
+
+NOT_IN_CONFIG_FILE = {"crypto_key"} # opt
+
+# ============================================================
+# BUILD CONFIG FILE
+# ============================================================
+
+def build_config_file(device):
+
+    filtered = {
+        k: v for k, v in device.items()
+        if k not in NOT_IN_CONFIG_FILE
+    }
+
+    plan = build_plan(filtered)
+    lines = ["!"]
+
+    for command in plan.get("global_config", []):
+        lines.append(command)
+    lines.append("!")
+
+    for mode, commands in plan.items():
+
+        if mode == "global_config":
+            continue
+
+        lines.append(CONFIG_FILE_MODES[mode])
+
+        for command in commands:
+            lines.append(f" {command}")
+
+        lines.append("!")
+
+    lines.append("end")
+    return "\n".join(lines)
+
+
+# ============================================================
+# SAVE CONFIG FILE
+# ============================================================
+
+def save_config_file(device, path=None):
+
+    hostname = device.get("hostname") or device["type"]
+
+    if path is None:
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        path = os.path.join(OUTPUT_DIR, f"{hostname}.txt")
+
+    with open(path, "w", encoding="utf-8") as file:
+        file.write(build_config_file(device))
+
+    print(f"Config file saved -> {path}")
+    return path
+
+# ============================================================
+# EXPORT PLAN
+# ============================================================
+
+def export_plan(device, plan):
+
+    if not plan:
+        return
+
+    text = plan_to_text(plan)
+
+    rt = auxiliar.validate_yes_no(
+        "Copy the configuration to the clipboard?"
+    )
+
+    if rt is True:
+        pyperclip.copy(text)
+        print("Configuration copied to clipboard.")
+
+    if device["type"] == "pc":
+        return
+
+    rt = auxiliar.validate_yes_no(
+        "Save the configuration to a file?"
+    )
+
+    if rt is True:
+        save_config_file(device)
+
+        if device.get("crypto_key"):
+            print(
+                "Note: 'crypto key generate rsa' is not included "
+                "in the config file. Run it manually after loading."
+            )
 
 
 # ============================================================
@@ -135,7 +240,8 @@ FIELD_DEFINITIONS = {
         "mode": "global_config",
 
         "render": "value",
-        "descriptor": "ip default-gateway"
+        "descriptor": "ip default-gateway",
+        "label": "IPv4 Default Gateway "
     },
 
 
@@ -231,7 +337,7 @@ FIELD_DEFINITIONS = {
 
         "mode": "global_config",
 
-        "render": "",
+        "render": "", # esto explota pero no lo agregue todavia
         "descriptor": "login block-for 30 attempts 2 within 120"
     },
 
@@ -259,7 +365,6 @@ FIELD_DEFINITIONS = {
     "login_local": {
         "question": (
             "Enable the login local?"
-            "(yes= )"
         ),
         "validator": auxiliar.validate_yes_no,
 
@@ -278,7 +383,8 @@ FIELD_DEFINITIONS = {
         "validator": auxiliar.validate_ip,
 
         "mode": None,
-        "render": None
+        "render": None,
+        "label": "IPv4 Address "
     },
 
 
@@ -291,7 +397,8 @@ FIELD_DEFINITIONS = {
         "validator": auxiliar.validate_ip,
 
         "mode": None,
-        "render": None
+        "render": None,
+        "label": "IPv4 Subnet Mask "
     },
 
 
@@ -304,7 +411,8 @@ FIELD_DEFINITIONS = {
         "validator": auxiliar.validate_ip,
 
         "mode": None,
-        "render": None
+        "render": None,
+        "label": "IPv4 DNS Server "
     }
 }
 
@@ -415,7 +523,6 @@ SECTION_FIELDS = {
     "basic": {
 
         "pc": [
-            "hostname",
             "ip",
             "mask",
             "gateway",
@@ -747,10 +854,60 @@ MODE_COMMANDS = {
 
 
 # ============================================================
+# PLAN TO TEXT
+# ============================================================
+
+def plan_to_text(plan):
+
+    lines = []
+    current_path = []
+
+    for mode, commands in plan.items():
+
+        target_path = get_path(mode)
+
+        # prefijo comun entre donde estoy y donde quiero ir
+        common = 0
+        while (common < len(current_path)
+               and common < len(target_path)
+               and current_path[common] == target_path[common]):
+            common += 1
+
+        # salir de los modos que sobran
+        for i in range(len(current_path) - 1, common - 1, -1):
+            lines.append(f'{" " * ((i + 1) * INDENT)}exit')
+
+        # entrar a los modos que faltan
+        for i in range(common, len(target_path)):
+            enter = MODE_COMMANDS[target_path[i]]["enter"]
+            lines.append(f'{" " * (i * INDENT)}{enter}')
+
+        indent = " " * (len(target_path) * INDENT)
+
+        for command in commands:
+            lines.append(f"{indent}{command}")
+
+        current_path = target_path
+
+    lines.append(f'{" " * (2 * INDENT)}end')
+    lines.append(f'{" " * INDENT}write memory')
+
+    return "\n".join(lines)
+
+# ============================================================
 # PRINT PLAN
 # ============================================================
 
-INDENT = 1
+def get_path(mode):
+
+    path = []
+    current = mode
+
+    while current is not None:
+        path.append(current)
+        current = MODE_COMMANDS[current]["parent"]
+
+    return list(reversed(path))
 
 def get_depth(mode):
     depth = 0
@@ -768,41 +925,42 @@ def print_plan(plan):
     print("-" * 60)
     print("IOS CONFIGURATION PLAN")
     print("-" * 60)
+    print(plan_to_text(plan))
+    print("-" * 60)
+    print()
 
-    print(MODE_COMMANDS["privileged_exec"]["enter"])
+def print_pc_plan(device):
 
-    current_mode = "privileged_exec"
+    hostname = device.get("hostname") or "PC"
 
-    for mode, commands in plan.items():
+    print()
+    print("-" * 60)
+    print(f"{hostname} — Desktop > IP Configuration")
+    print("-" * 60)
 
-        depth = get_depth(mode)
+    for field_name in SECTION_FIELDS["basic"]["pc"]:
 
-        target_parent = MODE_COMMANDS[mode]["parent"]
-        node = current_mode
+        value = device.get(field_name)
 
-        while node != target_parent:
+        if value is None:
+            continue
 
-            depth_current = get_depth(node)
+        label = FIELD_DEFINITIONS[field_name].get("label")
 
-            print(f'{" " * ((depth_current + 1) * INDENT)}exit')
+        if label is None:
+            continue
 
-            node = MODE_COMMANDS[node]["parent"]
-
-        father_indent = " " * (depth * INDENT)
-        child_indent = " " * ((depth + 1) * INDENT)
-
-        print(f'{father_indent}{MODE_COMMANDS[mode]["enter"]}')
-
-        for command in commands:
-            print(f"{child_indent}{command}")
-
-        current_mode = mode
-
-    print(f'{" " * (2 * INDENT)}end')
-    print(f'{" " * INDENT}write memory')
+        print(f"  {label:<16}{value}")
 
     print("-" * 60)
     print()
+
+def choose_plan(device, plan):
+    if device["type"] == "pc":
+        print_pc_plan(device)
+    else:
+        print_plan(plan)
+
 # ============================================================
 # SHOW DEVICE
 # ============================================================
@@ -952,9 +1110,13 @@ def categories_setup():
         # PRINT PLAN
         # ----------------------------------------------------
 
-        print_plan(
-            plan
-        )
+        choose_plan(device, plan)
+
+        # ----------------------------------------------------
+        # EXPORT PLAN
+        # ----------------------------------------------------
+
+        export_plan(device, plan)
 
 
 # ============================================================
@@ -967,7 +1129,74 @@ def guided_setup():
         "Guided Setup"
     )
 
-    pass
+    device = choose_device()
+
+    if device is None:
+        return
+
+    sections = DEVICE_SECTIONS[
+        device["type"]
+    ]
+
+    print(
+        f"Device type: {device['type']}"
+    )
+
+    for section in sections:
+
+        print()
+
+        setup_function = SECTION_SETUP_FUNCTIONS[
+            section
+        ]
+
+        new_device = setup_function(
+            device
+        )
+
+        if new_device is auxiliar.CANCEL:
+
+            print()
+            print(
+                f"{section.capitalize()} "
+                "setup cancelled."
+            )
+
+            continue
+
+
+        device = new_device
+
+
+        print()
+        print(
+            f"{section.capitalize()} "
+            "setup completed."
+        )
+
+    show_device(device)
+
+
+    # ----------------------------------------------------
+    # BUILD PLAN
+    # ----------------------------------------------------
+
+    plan = build_plan(
+        device
+    )
+
+
+    # ----------------------------------------------------
+    # PRINT PLAN
+    # ----------------------------------------------------
+
+    choose_plan(device, plan)
+
+    # ----------------------------------------------------
+    # EXPORT PLAN
+    # ----------------------------------------------------
+
+    export_plan(device, plan)
 
 
 # ============================================================
@@ -994,7 +1223,6 @@ def show_main_menu():
         "Categories Setup":
             categories_setup
     }
-
 
     while True:
 
