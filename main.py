@@ -233,8 +233,8 @@ FIELD_DEFINITIONS = {
     # GATEWAY
     # --------------------------------------------------------
 
-    "gateway": {
-        "question": "Write the default gateway",
+    "gateway_ipv4": {
+        "question": "Write the default gateway(ipv4)",
         "validator": auxiliar.validate_ip,
 
         "mode": "global_config",
@@ -243,6 +243,18 @@ FIELD_DEFINITIONS = {
         "descriptor": "ip default-gateway",
         "label": "IPv4 Default Gateway "
     },
+
+    "gateway_ipv6": {
+        "question": "Write the default gateway(ipv6)",
+        "validator": auxiliar.validate_ip,
+
+        "mode": "global_config",
+
+        "render": "value",
+        "descriptor": "ipv6 default-gateway",
+        "label": "IPv6 Default Gateway "
+    },
+
 
 
     # --------------------------------------------------------
@@ -378,8 +390,8 @@ FIELD_DEFINITIONS = {
     # PC IP
     # --------------------------------------------------------
 
-    "ip": {
-        "question": "Write the IP address",
+    "ipv4": {
+        "question": "Write the IPv4 address",
         "validator": auxiliar.validate_ip,
 
         "mode": None,
@@ -387,12 +399,21 @@ FIELD_DEFINITIONS = {
         "label": "IPv4 Address "
     },
 
+    "ipv6": {
+        "question": "Write the IPv6 address",
+        "validator": auxiliar.validate_ip,
+
+        "mode": None,
+        "render": None,
+        "label": "IPv6 Address "
+    },
+
 
     # --------------------------------------------------------
     # PC MASK
     # --------------------------------------------------------
 
-    "mask": {
+    "mask_ipv4": {
         "question": "Write the subnet mask",
         "validator": auxiliar.validate_ip,
 
@@ -402,17 +423,51 @@ FIELD_DEFINITIONS = {
     },
 
 
+    "prefix": {
+        "question": "Write the prefix",
+        "validator": auxiliar.validate_prefix,
+
+        "mode": None,
+        "render": None,
+        "label": "Prefix "
+    },
+
+
+    # --------------------------------------------------------
+    # PC LINK LOCAL (ipv6)
+    # --------------------------------------------------------
+
+    "link_local": {
+        "question": "Write the link local address",
+        "validator": auxiliar.validate_ip,
+
+        "mode": None,
+        "render": None,
+        "label": "IPv6 Link Local Address "
+    },
+
+
     # --------------------------------------------------------
     # PC DNS
     # --------------------------------------------------------
 
-    "dns": {
+    "dns_ipv4": {
         "question": "Write the DNS server",
         "validator": auxiliar.validate_ip,
 
         "mode": None,
         "render": None,
         "label": "IPv4 DNS Server "
+    },
+
+
+    "dns_ipv6": {
+        "question": "Write the DNS server",
+        "validator": auxiliar.validate_ip,
+
+        "mode": None,
+        "render": None,
+        "label": "IPv6 DNS Server "
     }
 }
 
@@ -523,16 +578,21 @@ SECTION_FIELDS = {
     "basic": {
 
         "pc": [
-            "ip",
-            "mask",
-            "gateway",
-            "dns"
+            "ipv4",
+            "mask_ipv4",
+            "gateway_ipv4",
+            "dns_ipv4",
+            "ipv6",
+            "prefix",
+            "link_local",
+            "gateway_ipv6",
+            "dns_ipv6"
         ],
 
         "switch": [
             "hostname",
             "password_encryption",
-            "gateway",
+            "gateway_ipv4",
             "banner",
             "dns_lookup",
             "console_password",

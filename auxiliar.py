@@ -335,6 +335,37 @@ def validate_ip(message, current=None):
         except ValueError:
             print("Invalid IP address.")
 
+# ============================================================
+# prefix validation
+# ============================================================
+
+def validate_prefix(message, current=None):
+    while True:
+        if current is None:
+            prompt = message
+        else:
+            prompt = f"{message} [{current}]"
+
+        value = input(
+            f"{prompt} "
+            "(skip = keep current, cancel = abort): "
+        ).strip()
+
+        if value.lower() == "cancel":
+            return CANCEL
+
+        if value.lower() == "skip":
+            return SKIP
+
+        try:
+            rt = int(value)
+            if 0<rt<129:
+                return rt
+            else:
+                print("Invalid option. (RANGE 0-128)")
+
+        except ValueError:
+            print("Invalid option. (RANGE 0-128)")
 
 # =========================
 # Yes / No
