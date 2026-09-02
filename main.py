@@ -80,6 +80,9 @@ def export_plan(device, plan):
     if not plan:
         return
 
+    if device["type"] == "pc":
+        return
+
     text = plan_to_text(plan)
 
     rt = auxiliar.validate_yes_no(
@@ -90,8 +93,7 @@ def export_plan(device, plan):
         pyperclip.copy(text)
         print("Configuration copied to clipboard.")
 
-    if device["type"] == "pc":
-        return
+
 
     rt = auxiliar.validate_yes_no(
         "Save the configuration to a file?"
@@ -241,18 +243,16 @@ FIELD_DEFINITIONS = {
 
         "render": "value",
         "descriptor": "ip default-gateway",
-        "label": "IPv4 Default Gateway "
+        "label": "IPv4 Default Gateway"
     },
 
     "gateway_ipv6": {
         "question": "Write the default gateway(ipv6)",
         "validator": auxiliar.validate_ip,
 
-        "mode": "global_config",
-
-        "render": "value",
-        "descriptor": "ipv6 default-gateway",
-        "label": "IPv6 Default Gateway "
+        "mode": None,
+        "render": None,
+        "label": "IPv6 Default Gateway"
     },
 
 
@@ -396,7 +396,7 @@ FIELD_DEFINITIONS = {
 
         "mode": None,
         "render": None,
-        "label": "IPv4 Address "
+        "label": "IPv4 Address"
     },
 
     "ipv6": {
@@ -405,7 +405,7 @@ FIELD_DEFINITIONS = {
 
         "mode": None,
         "render": None,
-        "label": "IPv6 Address "
+        "label": "IPv6 Address"
     },
 
 
@@ -419,7 +419,7 @@ FIELD_DEFINITIONS = {
 
         "mode": None,
         "render": None,
-        "label": "IPv4 Subnet Mask "
+        "label": "IPv4 Subnet Mask"
     },
 
 
@@ -429,7 +429,7 @@ FIELD_DEFINITIONS = {
 
         "mode": None,
         "render": None,
-        "label": "Prefix "
+        "label": "Prefix"
     },
 
 
@@ -443,7 +443,7 @@ FIELD_DEFINITIONS = {
 
         "mode": None,
         "render": None,
-        "label": "IPv6 Link Local Address "
+        "label": "IPv6 Link Local Address"
     },
 
 
@@ -452,22 +452,22 @@ FIELD_DEFINITIONS = {
     # --------------------------------------------------------
 
     "dns_ipv4": {
-        "question": "Write the DNS server",
+        "question": "Write the DNS server(IPv4)",
         "validator": auxiliar.validate_ip,
 
         "mode": None,
         "render": None,
-        "label": "IPv4 DNS Server "
+        "label": "IPv4 DNS Server"
     },
 
 
     "dns_ipv6": {
-        "question": "Write the DNS server",
+        "question": "Write the DNS server(IPv6)",
         "validator": auxiliar.validate_ip,
 
         "mode": None,
         "render": None,
-        "label": "IPv6 DNS Server "
+        "label": "IPv6 DNS Server"
     }
 }
 
@@ -969,17 +969,14 @@ def get_path(mode):
 
     return list(reversed(path))
 
-def get_depth(mode):
-    depth = 0
-    current = mode
-
-    while MODE_COMMANDS[current]["parent"] is not None:
-        depth += 1
-        current = MODE_COMMANDS[current]["parent"]
-
-    return depth
 
 def print_plan(plan):
+
+    if not plan:
+        print()
+        print("Nothing to configure")
+        print()
+        return
 
     print()
     print("-" * 60)
@@ -991,11 +988,9 @@ def print_plan(plan):
 
 def print_pc_plan(device):
 
-    hostname = device.get("hostname") or "PC"
-
     print()
     print("-" * 60)
-    print(f"{hostname} — Desktop > IP Configuration")
+    print("PC — Desktop > IP Configuration") # en un futuro se podria parametrizar el hostnames
     print("-" * 60)
 
     for field_name in SECTION_FIELDS["basic"]["pc"]:
@@ -1010,7 +1005,7 @@ def print_pc_plan(device):
         if label is None:
             continue
 
-        print(f"  {label:<16}{value}")
+        print(f"  {label:<26}{value}") # esto esta sujeto a cambio
 
     print("-" * 60)
     print()

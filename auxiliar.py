@@ -359,7 +359,7 @@ def validate_prefix(message, current=None):
 
         try:
             rt = int(value)
-            if 0<rt<129:
+            if 0<=rt<129:
                 return rt
             else:
                 print("Invalid option. (RANGE 0-128)")
