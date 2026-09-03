@@ -39,7 +39,7 @@ enable
   banner motd #only authorized#
   ip domain-lookup
   enable secret hola123
-  username thiagoxxi privilege 15 secret q12345
+  username thiagouser privilege 15 secret thiagopass
   ip domain-name casa.com
   crypto key generate rsa
   1024
