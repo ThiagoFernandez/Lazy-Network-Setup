@@ -80,9 +80,6 @@ def export_plan(device, plan):
     if not plan:
         return
 
-    if device["type"] == "pc":
-        return
-
     text = plan_to_text(plan)
 
     rt = auxiliar.validate_yes_no(
@@ -92,8 +89,6 @@ def export_plan(device, plan):
     if rt is True:
         pyperclip.copy(text)
         print("Configuration copied to clipboard.")
-
-
 
     rt = auxiliar.validate_yes_no(
         "Save the configuration to a file?"
@@ -235,17 +230,6 @@ FIELD_DEFINITIONS = {
     # GATEWAY
     # --------------------------------------------------------
 
-    "gateway_ipv4": {
-        "question": "Write the default gateway(ipv4)",
-        "validator": auxiliar.validate_ip,
-
-        "mode": "global_config",
-
-        "render": "value",
-        "descriptor": "ip default-gateway",
-        "label": "IPv4 Default Gateway"
-    },
-
     "gateway_ipv6": {
         "question": "Write the default gateway(ipv6)",
         "validator": auxiliar.validate_ip,
@@ -256,6 +240,37 @@ FIELD_DEFINITIONS = {
     },
 
 
+    "management_gateway_ipv4": {
+        "question": "Write the IPv4 default gateway",
+        "validator": auxiliar.validate_ip,
+        "label": "IPv4 Default Gateway",
+
+        "targets": {
+            "pc": {
+                "mode": None,
+                "render": None
+            },
+            "switch": {
+                "mode": "global_config",
+                "render": "value",
+                "descriptor": "ip default-gateway"
+            }
+        }
+    },
+
+    "default_route_ipv4": {
+            "question": "Write the IPv4 default route next-hop",
+            "validator": auxiliar.validate_ip,
+            "label": "IPv4 Default Route",
+
+            "targets": {
+                "router": {
+                    "mode": "global_config",
+                    "render": "value",
+                    "descriptor": "ip route 0.0.0.0 0.0.0.0"
+                }
+            }
+        },
 
     # --------------------------------------------------------
     # DOMAIN-NAME
@@ -294,16 +309,16 @@ FIELD_DEFINITIONS = {
     # --------------------------------------------------------
 
     "username": {
-        "question": "Configure username",
+        "question": "Configure username and secret",
         "validator": auxiliar.validate_username,
 
         "mode": "global_config",
 
-        "render": "username",
-
-        "command": "username {user} privilege 15 secret {secret}"
+        "render": "structured_multiple",
+        "commands": [
+            "username {user} privilege 15 secret {secret}"
+        ]
     },
-
 
     # --------------------------------------------------------
     # SSH-VERSION
@@ -391,22 +406,28 @@ FIELD_DEFINITIONS = {
     # --------------------------------------------------------
 
     "ipv4": {
-        "question": "Write the IPv4 address",
-        "validator": auxiliar.validate_ip,
-
-        "mode": None,
-        "render": None,
-        "label": "IPv4 Address"
-    },
+            "question": "Write the IPv4 address",
+            "validator": auxiliar.validate_ip,
+            "label": "IPv4 Address",
+            "targets": {
+                "pc": {
+                    "mode": None,
+                    "render": None
+                }
+            }
+        },
 
     "ipv6": {
-        "question": "Write the IPv6 address",
-        "validator": auxiliar.validate_ip,
-
-        "mode": None,
-        "render": None,
-        "label": "IPv6 Address"
-    },
+            "question": "Write the IPv6 address",
+            "validator": auxiliar.validate_ip,
+            "label": "IPv6 Address",
+            "targets": {
+                "pc": {
+                    "mode": None,
+                    "render": None
+                }
+            }
+        },
 
 
     # --------------------------------------------------------
@@ -414,13 +435,16 @@ FIELD_DEFINITIONS = {
     # --------------------------------------------------------
 
     "mask_ipv4": {
-        "question": "Write the subnet mask",
-        "validator": auxiliar.validate_ip,
-
-        "mode": None,
-        "render": None,
-        "label": "IPv4 Subnet Mask"
-    },
+            "question": "Write the IPv4 subnet mask",
+            "validator": auxiliar.validate_ip,
+            "label": "IPv4 Subnet Mask",
+            "targets": {
+                "pc": {
+                    "mode": None,
+                    "render": None
+                }
+            }
+        },
 
 
     "prefix": {
@@ -452,24 +476,51 @@ FIELD_DEFINITIONS = {
     # --------------------------------------------------------
 
     "dns_ipv4": {
-        "question": "Write the DNS server(IPv4)",
-        "validator": auxiliar.validate_ip,
+            "question": "Write the IPv4 DNS server",
+            "validator": auxiliar.validate_ip,
+            "label": "IPv4 DNS",
 
-        "mode": None,
-        "render": None,
-        "label": "IPv4 DNS Server"
-    },
+            "targets": {
+                "pc": {
+                    "mode": None,
+                    "render": None
+                },
+                "switch": {
+                    "mode": "global_config",
+                    "render": "value",
+                    "descriptor": "ip name-server"
+                },
+                "router": {
+                    "mode": "global_config",
+                    "render": "value",
+                    "descriptor": "ip name-server"
+                }
+            }
+        },
 
+        "dns_ipv6": {
+                "question": "Write the IPv6 DNS server",
+                "validator": auxiliar.validate_ip,
+                "label": "IPv6 DNS",
 
-    "dns_ipv6": {
-        "question": "Write the DNS server(IPv6)",
-        "validator": auxiliar.validate_ip,
-
-        "mode": None,
-        "render": None,
-        "label": "IPv6 DNS Server"
+                "targets": {
+                    "pc": {
+                        "mode": None,
+                        "render": None
+                    },
+                    "switch": {
+                        "mode": "global_config",
+                        "render": "value",
+                        "descriptor": "ipv6 name-server"
+                    },
+                    "router": {
+                        "mode": "global_config",
+                        "render": "value",
+                        "descriptor": "ipv6 name-server"
+                    }
+                }
+            },
     }
-}
 
 
 # ============================================================
@@ -517,18 +568,6 @@ def render_delimited(field, value):
         f"{descriptor} #{value}#"
     ]
 
-def render_username(field, value):
-
-    if value is None:
-        return []
-
-    return [
-        field["command"].format(
-            user=value["user"],
-            secret=value["secret"]
-        )
-    ]
-
 def render_multiple(field, value):
 
     if value is None:
@@ -543,6 +582,16 @@ def render_multiple(field, value):
 
     return commands
 
+def render_structured_multiple(field, value):
+    if value is None:
+        return []
+
+    commands = []
+
+    for command in field["commands"]:
+        commands.append(command.format(**value))
+
+    return commands
 
 # ============================================================
 # RENDER DISPATCH
@@ -564,8 +613,8 @@ RENDER_FUNCTIONS = {
     "boolean_enable":
         render_boolean_enable,
 
-    "username":
-        render_username
+    "structured_multiple":
+        render_structured_multiple
 }
 
 
@@ -580,7 +629,7 @@ SECTION_FIELDS = {
         "pc": [
             "ipv4",
             "mask_ipv4",
-            "gateway_ipv4",
+            "management_gateway_ipv4",
             "dns_ipv4",
             "ipv6",
             "prefix",
@@ -592,7 +641,7 @@ SECTION_FIELDS = {
         "switch": [
             "hostname",
             "password_encryption",
-            "gateway_ipv4",
+            "management_gateway_ipv4",
             "banner",
             "dns_lookup",
             "console_password",
@@ -603,6 +652,7 @@ SECTION_FIELDS = {
         "router": [
             "hostname",
             "password_encryption",
+            "default_route_ipv4",
             "banner",
             "dns_lookup",
             "min_length",
@@ -705,6 +755,30 @@ def get_section_fields(device, section):
 
 
 # ============================================================
+# RESOLVE FIELD
+# ============================================================
+
+def resolve_field(field_name, device_type):
+
+    field = FIELD_DEFINITIONS[field_name]
+
+    if "targets" not in field:
+        return field
+
+    if not device_type:
+        raise ValueError(f"Device type missing to resolve targets for field '{field_name}'")
+
+    if device_type not in field["targets"]:
+        raise KeyError(f"Target '{device_type}' not found for field '{field_name}'")
+
+    resolved_field = field.copy()
+    target_config = resolved_field.pop("targets")[device_type]
+    resolved_field.update(target_config)
+
+    return resolved_field
+
+
+# ============================================================
 # SETUP SECTION
 # ============================================================
 
@@ -719,7 +793,7 @@ def setup_section(device, section):
 
     for field_name in fields:
 
-        field = FIELD_DEFINITIONS[field_name]
+        field = resolve_field(field_name, temp_device["type"])
 
         validator = field["validator"]
 
@@ -799,14 +873,12 @@ SECTION_SETUP_FUNCTIONS = {
 # RENDER FIELD
 # ============================================================
 
-def render_field(field_name, value):
+def render_field(field, value):
 
     if value is None:
         return []
 
-    field = FIELD_DEFINITIONS[field_name]
-
-    render_type = field["render"]
+    render_type = field.get("render")
 
     if render_type is None:
         return []
@@ -824,26 +896,6 @@ def render_field(field_name, value):
 # ============================================================
 # BUILD PLAN
 # ============================================================
-#
-# Esta función NO imprime.
-#
-# Devuelve:
-#
-# {
-#     "global_config": [
-#         ...
-#     ],
-#
-#     "line_console": [
-#         ...
-#     ],
-#
-#     "line_vty": [
-#         ...
-#     ]
-# }
-#
-# ============================================================
 
 def build_plan(device):
 
@@ -857,7 +909,7 @@ def build_plan(device):
         if value is None:
             continue
 
-        field = FIELD_DEFINITIONS[field_name]
+        field = resolve_field(field_name, device["type"])
 
         mode = field["mode"]
 
@@ -865,7 +917,7 @@ def build_plan(device):
             continue
 
         commands = render_field(
-            field_name,
+            field,
             value
         )
 
@@ -882,11 +934,6 @@ def build_plan(device):
 
 # ============================================================
 # MODE COMMANDS
-# ============================================================
-#
-# Estos son los comandos que se usan para entrar a cada
-# contexto de configuración.
-#
 # ============================================================
 
 MODE_COMMANDS = {
@@ -990,7 +1037,7 @@ def print_pc_plan(device):
 
     print()
     print("-" * 60)
-    print("PC — Desktop > IP Configuration") # en un futuro se podria parametrizar el hostnames
+    print("PC — Desktop > IP Configuration")
     print("-" * 60)
 
     for field_name in SECTION_FIELDS["basic"]["pc"]:
@@ -1000,21 +1047,40 @@ def print_pc_plan(device):
         if value is None:
             continue
 
-        label = FIELD_DEFINITIONS[field_name].get("label")
+        field = resolve_field(field_name, device["type"])
+
+        label = field.get("label")
 
         if label is None:
             continue
 
-        print(f"  {label:<26}{value}") # esto esta sujeto a cambio
+        print(f"  {label:<26}{value}")
 
     print("-" * 60)
     print()
 
+# ============================================================
+# PLAN PRINT DISPATCH
+# ============================================================
+
+def print_ios_plan(device, plan):
+    print_plan(plan)
+
+
+def print_pc_plan_wrapper(device, plan):
+    print_pc_plan(device)
+
+
+PLAN_PRINT_FUNCTIONS = {
+    "pc": print_pc_plan_wrapper,
+    "switch": print_ios_plan,
+    "router": print_ios_plan
+}
+
+
 def choose_plan(device, plan):
-    if device["type"] == "pc":
-        print_pc_plan(device)
-    else:
-        print_plan(plan)
+    print_function = PLAN_PRINT_FUNCTIONS[device["type"]]
+    print_function(device, plan)
 
 # ============================================================
 # SHOW DEVICE
