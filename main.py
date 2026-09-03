@@ -11,12 +11,6 @@ INDENT = 1
 # CONFIG FILE
 # ============================================================
 
-CONFIG_FILE_MODES = {
-    "global_config": None,
-    "line_console": "line con 0",
-    "line_vty":     "line vty 0 15"
-}
-
 NOT_IN_CONFIG_FILE = {"crypto_key"} # opt
 
 # ============================================================
@@ -33,16 +27,22 @@ def build_config_file(device):
     plan = build_plan(filtered)
     lines = ["!"]
 
-    for command in plan.get("global_config", []):
-        lines.append(command)
-    lines.append("!")
+    # La raíz siempre se escribe primero
+    if CONFIG_FILE_ROOT in plan:
+        for command in plan[CONFIG_FILE_ROOT]:
+            lines.append(command)
 
+        lines.append("!")
+
+    # Después, todos los submodos en el orden del plan
     for mode, commands in plan.items():
 
-        if mode == "global_config":
+        if mode == CONFIG_FILE_ROOT:
             continue
 
-        lines.append(CONFIG_FILE_MODES[mode])
+        mode_config = MODE_COMMANDS[mode]
+
+        lines.append(mode_config["enter"])
 
         for command in commands:
             lines.append(f" {command}")
@@ -50,8 +50,8 @@ def build_config_file(device):
         lines.append("!")
 
     lines.append("end")
-    return "\n".join(lines)
 
+    return "\n".join(lines)
 
 # ============================================================
 # SAVE CONFIG FILE
@@ -937,27 +937,25 @@ def build_plan(device):
 # ============================================================
 
 MODE_COMMANDS = {
-
     "privileged_exec": {
         "enter": "enable",
         "parent": None
     },
-
     "global_config": {
         "enter": "configure terminal",
         "parent": "privileged_exec"
     },
-
     "line_console": {
         "enter": "line console 0",
         "parent": "global_config"
     },
-
     "line_vty": {
         "enter": "line vty 0 15",
         "parent": "global_config"
     }
 }
+
+CONFIG_FILE_ROOT = "global_config"
 
 
 # ============================================================
