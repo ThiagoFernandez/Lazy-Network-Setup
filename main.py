@@ -8,6 +8,52 @@ OUTPUT_DIR = "configs"
 INDENT = 1
 
 # ============================================================
+# INTERFACE ROLES
+# ============================================================
+
+# ask_fields    -> que se le pregunta al usuario, en orden
+# render_fields -> que comandos se emiten, en orden
+#
+# No son la misma lista: "ip address X Y" es UN comando que
+# necesita DOS respuestas (ipv4 + mask_ipv4). El campo virtual
+# ip_address los junta al renderizar.
+
+INTERFACE_ROLES = {
+
+    "access": {
+        "label": "Access port",
+        "device_types": ["switch"],
+        "ask_fields": ["description", "access_vlan", "shutdown"],
+        "render_fields": ["description", "access_vlan", "shutdown"]
+    },
+
+    "trunk": {
+        "label": "Trunk port",
+        "device_types": ["switch"],
+        "ask_fields": ["description", "trunk_allowed", "trunk_native", "shutdown"],
+        "render_fields": ["description", "trunk_allowed", "trunk_native", "shutdown"]
+    },
+
+    "svi": {
+        "label": "SVI (management)",
+        "device_types": ["switch"],
+        "ask_fields": ["description", "ipv4", "mask_ipv4", "shutdown"],
+        "render_fields": ["description", "ip_address", "shutdown"]
+    },
+
+    # la encapsulacion va ANTES que la IP: es el orden en que
+    # el IOS las espera, y tenerlo aca hace imposible cruzar
+    # el numero de subinterfaz con el de la VLAN
+
+    "subinterface": {
+        "label": "Subinterface (router-on-a-stick)",
+        "device_types": ["router"],
+        "ask_fields": ["description", "encapsulation", "ipv4", "mask_ipv4"],
+        "render_fields": ["description", "encapsulation", "ip_address"]
+    }
+}
+
+# ============================================================
 # CONFIG FILE
 # ============================================================
 
@@ -27,25 +73,21 @@ def build_config_file(device):
     plan = build_plan(filtered)
     lines = ["!"]
 
-    # La raíz siempre se escribe primero
-    if CONFIG_FILE_ROOT in plan:
-        for command in plan[CONFIG_FILE_ROOT]:
-            lines.append(command)
+    for block in plan:
 
-        lines.append("!")
+        if block["mode"] == CONFIG_FILE_ROOT:
+            for command in block["commands"]:
+                lines.append(command)
+        else:
+            enter = MODE_COMMANDS[block["mode"]]["enter"]
 
-    # Después, todos los submodos en el orden del plan
-    for mode, commands in plan.items():
+            if block.get("arg"):
+                enter = f"{enter}{block['arg']}"
 
-        if mode == CONFIG_FILE_ROOT:
-            continue
+            lines.append(enter)
 
-        mode_config = MODE_COMMANDS[mode]
-
-        lines.append(mode_config["enter"])
-
-        for command in commands:
-            lines.append(f" {command}")
+            for command in block["commands"]:
+                lines.append(f" {command}")
 
         lines.append("!")
 
@@ -233,10 +275,11 @@ FIELD_DEFINITIONS = {
     "gateway_ipv6": {
         "question": "Write the default gateway(ipv6)",
         "validator": auxiliar.validate_ip,
+        "label": "IPv6 Default Gateway",
 
-        "mode": None,
-        "render": None,
-        "label": "IPv6 Default Gateway"
+        "targets": {
+            "pc": {"mode": None, "render": None}
+        }
     },
 
 
@@ -259,18 +302,18 @@ FIELD_DEFINITIONS = {
     },
 
     "default_route_ipv4": {
-            "question": "Write the IPv4 default route next-hop",
-            "validator": auxiliar.validate_ip,
-            "label": "IPv4 Default Route",
+        "question": "Write the IPv4 default route next-hop",
+        "validator": auxiliar.validate_ip,
+        "label": "IPv4 Default Route",
 
-            "targets": {
-                "router": {
-                    "mode": "global_config",
-                    "render": "value",
-                    "descriptor": "ip route 0.0.0.0 0.0.0.0"
-                }
+        "targets": {
+            "router": {
+                "mode": "global_config",
+                "render": "value",
+                "descriptor": "ip route 0.0.0.0 0.0.0.0"
             }
-        },
+        }
+    },
 
     # --------------------------------------------------------
     # DOMAIN-NAME
@@ -405,29 +448,42 @@ FIELD_DEFINITIONS = {
     # PC IP
     # --------------------------------------------------------
 
+    # en switch y router estos dos NO se renderizan solos:
+    # los consume el campo virtual ip_address
+
     "ipv4": {
-            "question": "Write the IPv4 address",
-            "validator": auxiliar.validate_ip,
-            "label": "IPv4 Address",
-            "targets": {
-                "pc": {
-                    "mode": None,
-                    "render": None
-                }
+        "question": "Write the IPv4 address",
+        "validator": auxiliar.validate_ip,
+        "label": "IPv4 Address",
+
+        "targets": {
+            "pc": {
+                "mode": None,
+                "render": None
+            },
+            "switch": {
+                "mode": None,
+                "render": None
+            },
+            "router": {
+                "mode": None,
+                "render": None
             }
-        },
+        }
+    },
 
     "ipv6": {
-            "question": "Write the IPv6 address",
-            "validator": auxiliar.validate_ip,
-            "label": "IPv6 Address",
-            "targets": {
-                "pc": {
-                    "mode": None,
-                    "render": None
-                }
+        "question": "Write the IPv6 address",
+        "validator": auxiliar.validate_ip,
+        "label": "IPv6 Address",
+
+        "targets": {
+            "pc": {
+                "mode": None,
+                "render": None
             }
-        },
+        }
+    },
 
 
     # --------------------------------------------------------
@@ -435,25 +491,58 @@ FIELD_DEFINITIONS = {
     # --------------------------------------------------------
 
     "mask_ipv4": {
-            "question": "Write the IPv4 subnet mask",
-            "validator": auxiliar.validate_ip,
-            "label": "IPv4 Subnet Mask",
-            "targets": {
-                "pc": {
-                    "mode": None,
-                    "render": None
-                }
+        "question": "Write the IPv4 subnet mask",
+        "validator": auxiliar.validate_ip,
+        "label": "IPv4 Subnet Mask",
+
+        "targets": {
+            "pc": {
+                "mode": None,
+                "render": None
+            },
+            "switch": {
+                "mode": None,
+                "render": None
+            },
+            "router": {
+                "mode": None,
+                "render": None
             }
-        },
+        }
+    },
+
+
+    # --------------------------------------------------------
+    # IP ADDRESS (campo virtual)
+    # --------------------------------------------------------
+    #
+    # No se pregunta: "requires" dice de que campos toma los
+    # valores, y build_interface_commands le pasa un dict con
+    # todos ellos en vez de un valor suelto.
+    #
+    # Solo aparece en render_fields, nunca en ask_fields.
+    # --------------------------------------------------------
+
+    "ip_address": {
+        "requires": ["ipv4", "mask_ipv4"],
+
+        "mode": "interface",
+
+        "render": "template",
+        "commands": [
+            "ip address {ipv4} {mask_ipv4}"
+        ]
+    },
 
 
     "prefix": {
         "question": "Write the prefix",
         "validator": auxiliar.validate_prefix,
+        "label": "Prefix",
 
-        "mode": None,
-        "render": None,
-        "label": "Prefix"
+        "targets": {
+            "pc": {"mode": None, "render": None}
+        }
     },
 
 
@@ -464,10 +553,11 @@ FIELD_DEFINITIONS = {
     "link_local": {
         "question": "Write the link local address",
         "validator": auxiliar.validate_ip,
+        "label": "IPv6 Link Local Address",
 
-        "mode": None,
-        "render": None,
-        "label": "IPv6 Link Local Address"
+        "targets": {
+            "pc": {"mode": None, "render": None}
+        }
     },
 
 
@@ -475,52 +565,141 @@ FIELD_DEFINITIONS = {
     # PC DNS
     # --------------------------------------------------------
 
-    "dns_ipv4": {
-            "question": "Write the IPv4 DNS server",
-            "validator": auxiliar.validate_ip,
-            "label": "IPv4 DNS",
+    "dns": {
+        "question": "Write the IP DNS server",
+        "validator": auxiliar.validate_ip,
+        "label": "IP DNS",
 
-            "targets": {
-                "pc": {
-                    "mode": None,
-                    "render": None
-                },
-                "switch": {
-                    "mode": "global_config",
-                    "render": "value",
-                    "descriptor": "ip name-server"
-                },
-                "router": {
-                    "mode": "global_config",
-                    "render": "value",
-                    "descriptor": "ip name-server"
-                }
-            }
-        },
-
-        "dns_ipv6": {
-                "question": "Write the IPv6 DNS server",
-                "validator": auxiliar.validate_ip,
-                "label": "IPv6 DNS",
-
-                "targets": {
-                    "pc": {
-                        "mode": None,
-                        "render": None
-                    },
-                    "switch": {
-                        "mode": "global_config",
-                        "render": "value",
-                        "descriptor": "ipv6 name-server"
-                    },
-                    "router": {
-                        "mode": "global_config",
-                        "render": "value",
-                        "descriptor": "ipv6 name-server"
-                    }
-                }
+        "targets": {
+            "pc": {
+                "mode": None,
+                "render": None
             },
+            "switch": {
+                "mode": "global_config",
+                "render": "value",
+                "descriptor": "ip name-server"
+            },
+            "router": {
+                "mode": "global_config",
+                "render": "value",
+                "descriptor": "ip name-server"
+            }
+        }
+    },
+
+    "vlan": {
+        "question": "Write the VLAN ID (1-4094)",
+        "validator": auxiliar.validate_vlan_id,
+        "label": "",
+
+        "targets": {
+            "pc": {
+                "mode": None,
+                "render": None
+            },
+            "switch": {
+                "mode": "global_config",
+                "render": "value",
+                "descriptor": "vlan"
+            },
+            "router": {
+                "mode": "global_config",
+                "render": "value",
+                "descriptor": "vlan"
+            }
+        }
+    },
+
+
+    # --------------------------------------------------------
+    # INTERFACE FIELDS
+    # --------------------------------------------------------
+
+    "shutdown": {
+        "question": "Shutdown the interface?",
+        "validator": auxiliar.validate_yes_no,
+        "label": "",
+
+        "mode": "interface",
+
+        "render": "boolean_enable_disable",
+        "descriptor": "shutdown"
+    },
+
+    "description": {
+        "question": "Interface description:",
+        "validator": auxiliar.validate_optional_string,
+        "label": "",
+
+        "mode": "interface",
+
+        "render": "value",
+        "descriptor": "description"
+    },
+
+    "access_vlan": {
+        "question": "Write the access VLAN ID",
+        "validator": auxiliar.validate_vlan_id,
+
+        "mode": "interface",
+
+        "render": "multiple",
+        "commands": [
+            "switchport mode access",
+            "switchport access vlan {value}"
+        ]
+    },
+
+    "trunk_allowed": {
+        "question": "Write the allowed VLANs (e.g. 1,10,30)",
+        "validator": auxiliar.validate_vlan_list,
+
+        "mode": "interface",
+
+        "render": "multiple",
+        "commands": [
+            "switchport mode trunk",
+            "switchport trunk allowed vlan {value}"
+        ]
+    },
+
+    "trunk_native": {
+        "question": "Write the native VLAN ID",
+        "validator": auxiliar.validate_vlan_id,
+
+        "mode": "interface",
+
+        "render": "value",
+        "descriptor": "switchport trunk native vlan"
+    },
+
+    # usado por el rol subinterface (router-on-a-stick)
+    "encapsulation": {
+        "question": "Write the VLAN ID for the encapsulation",
+        "validator": auxiliar.validate_vlan_id,
+
+        "mode": "interface",
+
+        "render": "value",
+        "descriptor": "encapsulation dot1Q"
+    },
+
+
+    # --------------------------------------------------------
+    # VLAN FIELDS
+    # --------------------------------------------------------
+
+    "vlan_name": {
+        "question": "Write the VLAN name",
+        "validator": auxiliar.validate_optional_string,
+
+        "mode": "vlan",
+
+        "render": "value",
+        "descriptor": "name"
     }
+}
 
 
 # ============================================================
@@ -593,6 +772,32 @@ def render_structured_multiple(field, value):
 
     return commands
 
+
+# ============================================================
+# RENDER TEMPLATE
+# ============================================================
+#
+# Para campos virtuales (los que tienen "requires"): recibe un
+# dict con todos los valores que el comando necesita, no un
+# valor suelto.
+#
+#     {"ipv4": "172.17.10.1", "mask_ipv4": "255.255.255.0"}
+#     -> "ip address 172.17.10.1 255.255.255.0"
+#
+# ============================================================
+
+def render_template(field, values):
+
+    if values is None:
+        return []
+
+    commands = []
+
+    for command in field["commands"]:
+        commands.append(command.format(**values))
+
+    return commands
+
 # ============================================================
 # RENDER DISPATCH
 # ============================================================
@@ -614,7 +819,10 @@ RENDER_FUNCTIONS = {
         render_boolean_enable,
 
     "structured_multiple":
-        render_structured_multiple
+        render_structured_multiple,
+
+    "template":
+        render_template
 }
 
 
@@ -630,12 +838,12 @@ SECTION_FIELDS = {
             "ipv4",
             "mask_ipv4",
             "management_gateway_ipv4",
-            "dns_ipv4",
+            "dns",
             "ipv6",
             "prefix",
             "link_local",
             "gateway_ipv6",
-            "dns_ipv6"
+
         ],
 
         "switch": [
@@ -687,11 +895,14 @@ SECTION_FIELDS = {
     },
 
 
+    # las interfaces ya no se cargan como campos planos:
+    # viven en device["interfaces"] y se piden con su propio loop
     "interfaces": {
 
         "pc": [],
 
-        "switch": [],
+        "switch": [
+        ],
 
         "router": []
     }
@@ -737,6 +948,15 @@ def crear_device(device_type):
         for field in SECTION_FIELDS[section][device_type]:
 
             device[field] = None
+
+    # las interfaces y las vlans no son campos planos:
+    # son listas propias que se llenan con sus sub-loops
+
+    if device_type in ("switch", "router"):
+        device["interfaces"] = []
+
+    if device_type == "switch":
+        device["vlans"] = []
 
     return device
 
@@ -851,10 +1071,537 @@ def security_setup(device):
 
 def interfaces_setup(device):
 
-    return setup_section(
-        device,
-        "interfaces"
+    # las VLANs primero: asi al cargar un puerto access ya
+    # existen los IDs a los que se lo puede asignar
+
+    if device["type"] == "switch":
+        device = vlans_setup(device)
+
+    device = interfaces_loop(device)
+
+    return device
+
+
+# ============================================================
+# VLANS SETUP
+# ============================================================
+#
+# Las VLANs viven en device["vlans"] como una lista de dicts:
+#
+#     [{"id": 10, "name": "VENTAS"}, {"id": 30, "name": None}]
+#
+# El name es opcional: build_plan ya contempla que sea None y
+# emite igual el "vlan N", que es la creacion en si.
+#
+# ============================================================
+
+def vlan_label(vlan):
+
+    if vlan["name"]:
+        return f"VLAN {vlan['id']} - {vlan['name']}"
+
+    return f"VLAN {vlan['id']}"
+
+
+def show_vlans(vlans):
+
+    print()
+    print("-" * 60)
+    print("VLANS")
+    print("-" * 60)
+
+    if not vlans:
+        print("No VLANs configured.")
+    else:
+        # desde 1, igual que show_options (el 0 es cancelar)
+        for i, vlan in enumerate(vlans, start=1):
+            print(f"{i}. {vlan_label(vlan)}")
+
+    print("-" * 60)
+
+
+def find_vlan(vlans, vlan_id):
+
+    for i, vlan in enumerate(vlans):
+
+        if vlan["id"] == vlan_id:
+            return i
+
+    return None
+
+
+def choose_vlan(vlans):
+
+    if not vlans:
+        print()
+        print("No VLANs configured.")
+        return None
+
+    labels = [vlan_label(vlan) for vlan in vlans]
+
+    auxiliar.show_options(labels)
+
+    result = auxiliar.validate_number(labels)
+
+    if result == -1:
+        return None
+
+    return result - 1
+
+
+# ============================================================
+# ASK VLAN
+# ============================================================
+#
+# Devuelve un dict nuevo o auxiliar.CANCEL.
+#
+# NO muta el dict que recibe: cuando se edita, current es el
+# dict real de la lista, y un cancel a mitad de camino lo
+# dejaria a medio escribir.
+#
+# ============================================================
+
+def ask_vlan(current=None):
+
+    current_id = current["id"] if current else None
+    current_name = current["name"] if current else None
+
+    # ----------------------------------------------------
+    # ID
+    # ----------------------------------------------------
+
+    result = auxiliar.validate_vlan_id(
+        FIELD_DEFINITIONS["vlan"]["question"],
+        current_id
     )
+
+    if result is auxiliar.CANCEL:
+        return auxiliar.CANCEL
+
+    if result is auxiliar.SKIP:
+
+        # VLAN nueva: sin ID no hay nada que crear
+        if current_id is None:
+            return auxiliar.CANCEL
+
+        vlan_id = current_id
+
+    else:
+        vlan_id = result
+
+    # ----------------------------------------------------
+    # NAME (opcional)
+    # ----------------------------------------------------
+
+    result = auxiliar.validate_optional_string(
+        FIELD_DEFINITIONS["vlan_name"]["question"],
+        current_name
+    )
+
+    if result is auxiliar.CANCEL:
+        return auxiliar.CANCEL
+
+    if result is auxiliar.SKIP:
+        vlan_name = current_name
+    else:
+        vlan_name = result
+
+    return {
+        "id": vlan_id,
+        "name": vlan_name
+    }
+
+
+# ============================================================
+# VLANS LOOP
+# ============================================================
+#
+# A diferencia de setup_section, cancelar aca aborta solo la
+# VLAN en curso, no todo lo cargado antes. El 0 del menu
+# confirma y devuelve.
+#
+# ============================================================
+
+def vlans_setup(device):
+
+    temp_device = copy.deepcopy(device)
+
+    options = [
+        "Add VLAN",
+        "Edit VLAN",
+        "Remove VLAN"
+    ]
+
+    while True:
+
+        show_vlans(temp_device["vlans"])
+
+        auxiliar.show_options(options)
+
+        result = auxiliar.validate_number(options)
+
+        if result == -1:
+            return temp_device
+
+        option = options[result - 1]
+
+        # ----------------------------------------------------
+        # ADD
+        # ----------------------------------------------------
+
+        if option == "Add VLAN":
+
+            vlan = ask_vlan()
+
+            if vlan is auxiliar.CANCEL:
+                continue
+
+            if find_vlan(temp_device["vlans"], vlan["id"]) is not None:
+                print()
+                print(f"VLAN {vlan['id']} already exists. Edit it instead.")
+                continue
+
+            temp_device["vlans"].append(vlan)
+
+        # ----------------------------------------------------
+        # EDIT
+        # ----------------------------------------------------
+
+        elif option == "Edit VLAN":
+
+            index = choose_vlan(temp_device["vlans"])
+
+            if index is None:
+                continue
+
+            vlan = ask_vlan(temp_device["vlans"][index])
+
+            if vlan is auxiliar.CANCEL:
+                continue
+
+            temp_device["vlans"][index] = vlan
+
+        # ----------------------------------------------------
+        # REMOVE
+        # ----------------------------------------------------
+
+        elif option == "Remove VLAN":
+
+            index = choose_vlan(temp_device["vlans"])
+
+            if index is None:
+                continue
+
+            removed = temp_device["vlans"].pop(index)
+
+            print()
+            print(f"{vlan_label(removed)} removed.")
+
+
+# ============================================================
+# INTERFACES SETUP
+# ============================================================
+#
+# Las interfaces viven en device["interfaces"] como una lista
+# de dicts:
+#
+#     [{"name": "fa0/1-12", "role": "access", "access_vlan": 10},
+#      {"name": "g0/1", "role": "trunk", "trunk_allowed": "1,10,30"}]
+#
+# El rol decide que campos se piden (INTERFACE_ROLES) y en que
+# orden se renderizan. El nombre decide si build_plan usa
+# "interface" o "interface range".
+#
+# ============================================================
+
+def interface_label(interface):
+
+    role = INTERFACE_ROLES[interface["role"]]["label"]
+
+    return f"{interface['name']} ({role})"
+
+
+def show_interfaces(interfaces):
+
+    print()
+    print("-" * 60)
+    print("INTERFACES")
+    print("-" * 60)
+
+    if not interfaces:
+        print("No interfaces configured.")
+    else:
+        for i, interface in enumerate(interfaces, start=1):
+            print(f"{i}. {interface_label(interface)}")
+
+    print("-" * 60)
+
+
+def find_interface(interfaces, name):
+
+    for i, interface in enumerate(interfaces):
+
+        if interface["name"] == name:
+            return i
+
+    return None
+
+
+def choose_interface(interfaces):
+
+    if not interfaces:
+        print()
+        print("No interfaces configured.")
+        return None
+
+    labels = [interface_label(i) for i in interfaces]
+
+    auxiliar.show_options(labels)
+
+    result = auxiliar.validate_number(labels)
+
+    if result == -1:
+        return None
+
+    return result - 1
+
+
+# ============================================================
+# ROLES
+# ============================================================
+
+def get_roles(device_type):
+
+    return [
+        name
+        for name, role in INTERFACE_ROLES.items()
+        if device_type in role["device_types"]
+    ]
+
+
+def choose_role(device_type, current=None):
+
+    roles = get_roles(device_type)
+
+    if not roles:
+        print()
+        print(f"No interface roles available for '{device_type}' yet.")
+        return None
+
+    labels = [INTERFACE_ROLES[name]["label"] for name in roles]
+
+    print()
+
+    if current is None:
+        print("Choose the interface role")
+    else:
+        print(f"Choose the interface role [{INTERFACE_ROLES[current]['label']}]")
+
+    auxiliar.show_options(labels)
+
+    result = auxiliar.validate_number(labels)
+
+    if result == -1:
+        return None
+
+    return roles[result - 1]
+
+
+# ============================================================
+# ASK INTERFACE FIELDS
+# ============================================================
+#
+# Es setup_section pero operando sobre el dict de una interfaz
+# en vez de sobre el device. Los campos y su orden salen de
+# INTERFACE_ROLES[role]["fields"].
+#
+# ============================================================
+
+def ask_interface_fields(interface, device_type):
+
+    role = INTERFACE_ROLES[interface["role"]]
+
+    for field_name in role["ask_fields"]:
+
+        field = resolve_field(field_name, device_type)
+
+        validator = field["validator"]
+
+        result = validator(
+            field["question"],
+            interface.get(field_name)
+        )
+
+        if result is auxiliar.CANCEL:
+            return auxiliar.CANCEL
+
+        if result is auxiliar.SKIP:
+            continue
+
+        interface[field_name] = result
+
+    return interface
+
+
+# ============================================================
+# ASK INTERFACE
+# ============================================================
+#
+# Devuelve un dict nuevo o auxiliar.CANCEL. No muta el que
+# recibe (mismo motivo que ask_vlan).
+#
+# ============================================================
+
+def ask_interface(device_type, current=None):
+
+    current_name = current["name"] if current else None
+    current_role = current["role"] if current else None
+
+    # ----------------------------------------------------
+    # NAME
+    # ----------------------------------------------------
+
+    result = auxiliar.validate_interface_name(
+        "Write the interface name (e.g. g0/1 or fa0/1-12)",
+        current_name
+    )
+
+    if result is auxiliar.CANCEL:
+        return auxiliar.CANCEL
+
+    if result is auxiliar.SKIP:
+
+        # interfaz nueva: sin nombre no hay nada que configurar
+        if current_name is None:
+            return auxiliar.CANCEL
+
+        name = current_name
+
+    else:
+        name = result
+
+    # ----------------------------------------------------
+    # ROLE
+    # ----------------------------------------------------
+
+    role = choose_role(device_type, current_role)
+
+    if role is None:
+
+        # cancelar el rol de una interfaz que ya existe deja
+        # el rol anterior; en una nueva aborta
+
+        if current_role is None:
+            return auxiliar.CANCEL
+
+        role = current_role
+
+    # ----------------------------------------------------
+    # FIELDS
+    # ----------------------------------------------------
+    #
+    # Si el rol cambio, los campos del rol viejo no se
+    # arrastran: build_interface_commands los ignoraria, pero
+    # quedarian en el dict confundiendo a show_device.
+
+    interface = {"name": name, "role": role}
+
+    if current and current_role == role:
+        for field_name in INTERFACE_ROLES[role]["ask_fields"]:
+            if field_name in current:
+                interface[field_name] = current[field_name]
+
+    result = ask_interface_fields(interface, device_type)
+
+    if result is auxiliar.CANCEL:
+        return auxiliar.CANCEL
+
+    return result
+
+
+# ============================================================
+# INTERFACES LOOP
+# ============================================================
+
+def interfaces_loop(device):
+
+    temp_device = copy.deepcopy(device)
+
+    options = [
+        "Add interface",
+        "Edit interface",
+        "Remove interface"
+    ]
+
+    while True:
+
+        show_interfaces(temp_device["interfaces"])
+
+        auxiliar.show_options(options)
+
+        result = auxiliar.validate_number(options)
+
+        if result == -1:
+            return temp_device
+
+        option = options[result - 1]
+
+        # ----------------------------------------------------
+        # ADD
+        # ----------------------------------------------------
+
+        if option == "Add interface":
+
+            interface = ask_interface(temp_device["type"])
+
+            if interface is auxiliar.CANCEL:
+                continue
+
+            if find_interface(temp_device["interfaces"], interface["name"]) is not None:
+                print()
+                print(
+                    f"{interface['name']} already exists. Edit it instead."
+                )
+                continue
+
+            temp_device["interfaces"].append(interface)
+
+        # ----------------------------------------------------
+        # EDIT
+        # ----------------------------------------------------
+
+        elif option == "Edit interface":
+
+            index = choose_interface(temp_device["interfaces"])
+
+            if index is None:
+                continue
+
+            interface = ask_interface(
+                temp_device["type"],
+                temp_device["interfaces"][index]
+            )
+
+            if interface is auxiliar.CANCEL:
+                continue
+
+            temp_device["interfaces"][index] = interface
+
+        # ----------------------------------------------------
+        # REMOVE
+        # ----------------------------------------------------
+
+        elif option == "Remove interface":
+
+            index = choose_interface(temp_device["interfaces"])
+
+            if index is None:
+                continue
+
+            removed = temp_device["interfaces"].pop(index)
+
+            print()
+            print(f"{interface_label(removed)} removed.")
 
 
 # ============================================================
@@ -896,14 +1643,29 @@ def render_field(field, value):
 # ============================================================
 # BUILD PLAN
 # ============================================================
+#
+# Devuelve una lista de bloques:
+#
+# [
+#     {"mode": "global_config", "commands": [...]},
+#     {"mode": "vlan",      "arg": "10",     "commands": [...]},
+#     {"mode": "interface", "arg": "g0/1",   "commands": [...]}
+# ]
+#
+# ============================================================
 
 def build_plan(device):
 
-    plan = {}
+    blocks = {}
+    ordered_modes = []
+
+    # --------------------------------------------------------
+    # CAMPOS PLANOS DEL DEVICE
+    # --------------------------------------------------------
 
     for field_name, value in device.items():
 
-        if field_name == "type":
+        if field_name in ("type", "interfaces", "vlans"):
             continue
 
         if value is None:
@@ -911,29 +1673,128 @@ def build_plan(device):
 
         field = resolve_field(field_name, device["type"])
 
-        mode = field["mode"]
+        mode = field.get("mode")
 
         if mode is None:
             continue
 
-        commands = render_field(
-            field,
-            value
-        )
+        commands = render_field(field, value)
 
         if not commands:
             continue
 
-        if mode not in plan:
-            plan[mode] = []
+        if mode not in blocks:
+            blocks[mode] = []
+            ordered_modes.append(mode)
 
-        plan[mode].extend(commands)
+        blocks[mode].extend(commands)
+
+    plan = [
+        {"mode": mode, "commands": blocks[mode]}
+        for mode in ordered_modes
+    ]
+
+    # --------------------------------------------------------
+    # VLANS
+    # --------------------------------------------------------
+    #
+    # Van antes que las interfaces: si un puerto referencia una
+    # VLAN inexistente el IOS la crea igual, pero sin nombre.
+    #
+    # Un bloque de VLAN puede quedar sin comandos (VLAN sin
+    # nombre) y aun asi hay que emitirlo, porque el "vlan N"
+    # es la creacion en si.
+    # --------------------------------------------------------
+
+    for vlan in device.get("vlans") or []:
+
+        commands = []
+
+        if vlan.get("name"):
+            field = resolve_field("vlan_name", device["type"])
+            commands.extend(render_field(field, vlan["name"]))
+
+        plan.append({
+            "mode": "vlan",
+            "arg": str(vlan["id"]),
+            "commands": commands
+        })
+
+    # --------------------------------------------------------
+    # INTERFACES
+    # --------------------------------------------------------
+
+    for interface in device.get("interfaces") or []:
+
+        commands = build_interface_commands(interface, device["type"])
+
+        if not commands:
+            continue
+
+        mode = "interface_range" if "-" in interface["name"] else "interface"
+
+        plan.append({
+            "mode": mode,
+            "arg": interface["name"],
+            "commands": commands
+        })
 
     return plan
 
 
 # ============================================================
+# BUILD INTERFACE COMMANDS
+# ============================================================
+#
+# El orden de los comandos lo define role["fields"], no el
+# orden en que el usuario cargo los datos. Importa: por ej.
+# "switchport mode access" tiene que salir antes que
+# "switchport access vlan", y shutdown va ultimo.
+#
+# ============================================================
+
+def build_interface_commands(interface, device_type):
+
+    role = INTERFACE_ROLES[interface["role"]]
+
+    commands = []
+
+    for field_name in role["render_fields"]:
+
+        field = resolve_field(field_name, device_type)
+
+        requires = field.get("requires")
+
+        if requires:
+
+            # campo virtual: necesita todos sus valores; si
+            # falta alguno el comando no se puede armar
+
+            if any(interface.get(name) is None for name in requires):
+                continue
+
+            value = {name: interface[name] for name in requires}
+
+        else:
+
+            value = interface.get(field_name)
+
+            if value is None:
+                continue
+
+        commands.extend(render_field(field, value))
+
+    return commands
+
+
+# ============================================================
 # MODE COMMANDS
+# ============================================================
+#
+# Estos son los comandos que se usan para entrar a cada
+# contexto de configuracion. Los que terminan en espacio
+# esperan un "arg" que se concatena (interface, vlan).
+#
 # ============================================================
 
 MODE_COMMANDS = {
@@ -952,7 +1813,19 @@ MODE_COMMANDS = {
     "line_vty": {
         "enter": "line vty 0 15",
         "parent": "global_config"
-    }
+    },
+    "interface": {
+        "enter": "interface ",
+        "parent": "global_config"
+    },
+    "interface_range": {
+        "enter": "interface range ",
+        "parent": "global_config"
+    },
+    "vlan": {
+        "enter": "vlan ",
+        "parent": "global_config"
+    },
 }
 
 CONFIG_FILE_ROOT = "global_config"
@@ -967,15 +1840,19 @@ def plan_to_text(plan):
     lines = []
     current_path = []
 
-    for mode, commands in plan.items():
+    for block in plan:
 
-        target_path = get_path(mode)
+        target_path = get_path(block["mode"])
+
+        # el ultimo nodo lleva el arg; los padres no
+        target_keys = [(mode, None) for mode in target_path[:-1]]
+        target_keys.append((target_path[-1], block.get("arg")))
 
         # prefijo comun entre donde estoy y donde quiero ir
         common = 0
         while (common < len(current_path)
-               and common < len(target_path)
-               and current_path[common] == target_path[common]):
+               and common < len(target_keys)
+               and current_path[common] == target_keys[common]):
             common += 1
 
         # salir de los modos que sobran
@@ -983,16 +1860,21 @@ def plan_to_text(plan):
             lines.append(f'{" " * ((i + 1) * INDENT)}exit')
 
         # entrar a los modos que faltan
-        for i in range(common, len(target_path)):
-            enter = MODE_COMMANDS[target_path[i]]["enter"]
+        for i in range(common, len(target_keys)):
+            mode, arg = target_keys[i]
+            enter = MODE_COMMANDS[mode]["enter"]
+
+            if arg:
+                enter = f"{enter}{arg}"
+
             lines.append(f'{" " * (i * INDENT)}{enter}')
 
-        indent = " " * (len(target_path) * INDENT)
+        indent = " " * (len(target_keys) * INDENT)
 
-        for command in commands:
+        for command in block["commands"]:
             lines.append(f"{indent}{command}")
 
-        current_path = target_path
+        current_path = target_keys
 
     lines.append(f'{" " * (2 * INDENT)}end')
     lines.append(f'{" " * INDENT}write memory')
@@ -1096,6 +1978,32 @@ def show_device(device):
     for field, value in device.items():
 
         if field == "type":
+            continue
+
+        # las listas se imprimen aparte: el repr crudo de una
+        # lista de dicts es ilegible
+
+        if field == "vlans":
+
+            if not value:
+                print("vlans: none")
+            else:
+                print("vlans:")
+                for vlan in value:
+                    print(f"  - {vlan_label(vlan)}")
+
+            continue
+
+        if field == "interfaces":
+
+            if not value:
+                print("interfaces: none")
+            else:
+                print("interfaces:")
+                for interface in value:
+                    role = INTERFACE_ROLES[interface["role"]]["label"]
+                    print(f"  - {interface['name']} ({role})")
+
             continue
 
         if value is None:
@@ -1371,11 +2279,58 @@ def show_main_menu():
 
 
 # ============================================================
+# TEST PLAN
+# ============================================================
+#
+# Device armado a mano para probar el rendering sin tener que
+# tipear 20 respuestas. Borrar cuando este el loop de
+# interfaces.
+#
+# ============================================================
+
+def test_plan():
+
+    device = {
+        "type": "switch",
+        "hostname": "S1",
+        "console_password": "cisco",
+        "vlans": [
+            {"id": 10, "name": "VENTAS"},
+            {"id": 30, "name": "ADMIN"}
+        ],
+        "interfaces": [
+            {
+                "name": "fa0/1-12",
+                "role": "access",
+                "access_vlan": 10,
+                "description": "PCs ventas",
+                "shutdown": False
+            },
+            {
+                "name": "g0/1",
+                "role": "trunk",
+                "trunk_allowed": "1,10,30",
+                "trunk_native": 1
+            }
+        ]
+    }
+
+    print_plan(build_plan(device))
+
+    print("-" * 60)
+    print("CONFIG FILE")
+    print("-" * 60)
+    print(build_config_file(device))
+    print("-" * 60)
+
+
+# ============================================================
 # MAIN
 # ============================================================
 
 def main():
 
+    # test_plan()
     show_main_menu()
 
 

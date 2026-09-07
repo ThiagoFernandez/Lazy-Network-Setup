@@ -1,6 +1,39 @@
 import ipaddress
 import re
 
+INTERFACE_SIMPLE = r"[A-Za-z]+[0-9]+(?:/[0-9]+)*(?:\.[0-9]+)?"
+INTERFACE_RANGE = r"[A-Za-z]+[0-9]+(?:/[0-9]+)*-[0-9]+"
+
+def validate_interface_name(message, current=None):
+
+    while True:
+
+        if current is None:
+            prompt = message
+        else:
+            prompt = f"{message} [{current}]"
+
+        value = input(
+            f"{prompt} "
+            "(skip = keep current, cancel = abort): "
+        ).strip()
+
+        if value.lower() == "cancel":
+            return CANCEL
+
+        if value.lower() == "skip":
+            return SKIP
+
+        if re.fullmatch(INTERFACE_SIMPLE, value):
+            return value
+
+        if re.fullmatch(INTERFACE_RANGE, value):
+            return value
+
+        print(
+            "Invalid interface name. "
+            "Use e.g. g0/1, fa0/24, g0/1.10 or fa0/1-12"
+        )
 
 # =========================
 # Sentinels
@@ -78,6 +111,39 @@ def validate_number_v2(message, current=None):
         except ValueError:
             print("Please enter a number.")
 
+def validate_vlan_id(message, current=None):
+    while True:
+        prompt = message if current is None else f"{message} [{current}]"
+        value = input(f"{prompt} (skip = keep current, cancel = abort): ").strip()
+
+        if value.lower() == "cancel":
+            return CANCEL
+        if value.lower() == "skip":
+            return SKIP
+
+        try:
+            rt = int(value)
+            if 1 <= rt <= 4094:
+                return rt
+            print("Invalid VLAN ID. (RANGE 1-4094)")
+        except ValueError:
+            print("Invalid VLAN ID. (RANGE 1-4094)")
+
+
+def validate_vlan_list(message, current=None):
+    while True:
+        prompt = message if current is None else f"{message} [{current}]"
+        value = input(f"{prompt} (skip = keep current, cancel = abort): ").strip()
+
+        if value.lower() == "cancel":
+            return CANCEL
+        if value.lower() == "skip":
+            return SKIP
+
+        if re.fullmatch(r"\d+(-\d+)?(,\d+(-\d+)?)*", value):
+            return value
+
+        print("Invalid format. Use e.g. 1,10,30 or 1-10,20")
 
 # =========================
 # Optional string
