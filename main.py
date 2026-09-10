@@ -1898,10 +1898,61 @@ def check_duplicate_ips(device):
 
     return warnings
 
+def check_subinterface_encapsulation(device):
+    warnings = []
+
+    for interface in device.get("interfaces") or []:
+
+        if interface.get("role") != "subinterface":
+            continue
+
+        encapsulation = interface.get("encapsulation")
+
+        if encapsulation is None:
+            continue
+
+        _, _, suffix = interface["name"].partition(".")
+
+        if suffix and int(suffix) != encapsulation:
+            warnings.append(
+                f"{interface['name']} tiene encapsulation dot1Q {encapsulation}. "
+                f"Por convencion deberia ser {suffix}."
+            )
+
+    return warnings
+
+def check_svi_vlan_exists(device):
+
+    vlan_ids = {vlan["id"] for vlan in device.get("vlans") or []}
+
+    warnings = []
+
+    for interface in device.get("interfaces") or []:
+
+        if interface.get("role") != "svi":
+            continue
+
+        # el nombre puede ser vlan99, Vlan99 o "vlan 99"
+        match = re.search(r"(\d+)$", interface["name"])
+
+        if match is None:
+            continue
+
+        vlan_id = int(match.group(1))
+
+        if vlan_id not in vlan_ids:
+            warnings.append(
+                f"{interface['name']} necesita la VLAN {vlan_id}, "
+                "que no esta definida. La SVI va a quedar up/down."
+            )
+
+    return warnings
 
 LINT_RULES = [
     check_gateway_is_self,
-    check_duplicate_ips
+    check_duplicate_ips,
+    check_subinterface_encapsulation,
+    check_svi_vlan_exists
 ]
 
 
