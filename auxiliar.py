@@ -4,7 +4,10 @@ import re
 INTERFACE_SIMPLE = r"[A-Za-z]+[0-9]+(?:/[0-9]+)*(?:\.[0-9]+)?"
 INTERFACE_RANGE = r"[A-Za-z]+[0-9]+(?:/[0-9]+)*-[0-9]+"
 
-def validate_interface_name(message, current=None):
+def validate_interface_name(message, current=None, pattern=None, hint=None):
+
+    if pattern is None:
+        pattern = f"{INTERFACE_SIMPLE}|{INTERFACE_RANGE}"
 
     while True:
 
@@ -24,16 +27,13 @@ def validate_interface_name(message, current=None):
         if value.lower() == "skip":
             return SKIP
 
-        if re.fullmatch(INTERFACE_SIMPLE, value):
+        if re.fullmatch(pattern, value):
             return value
 
-        if re.fullmatch(INTERFACE_RANGE, value):
-            return value
-
-        print(
-            "Invalid interface name. "
-            "Use e.g. g0/1, fa0/24, g0/1.10 or fa0/1-12"
-        )
+        if hint:
+            print(f"Invalid interface name. Use e.g. {hint}")
+        else:
+            print("Invalid interface name.")
 
 # =========================
 # Sentinels

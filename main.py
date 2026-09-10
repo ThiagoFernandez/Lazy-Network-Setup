@@ -8,6 +8,24 @@ OUTPUT_DIR = "configs"
 INDENT = 1
 
 # ============================================================
+# INTERFACE NAME PATTERNS
+# ============================================================
+#
+# Cada rol declara que forma puede tener el nombre de su
+# interfaz. Sin esto se puede elegir el rol "svi" y tipear
+# "f0/1", que genera "ip address" en un puerto de capa 2 y
+# el IOS lo rechaza.
+#
+# El lookahead negativo en _PORT evita que "vlan10" pase
+# como puerto fisico.
+# ============================================================
+
+_PORT       = r"(?![Vv]lan)[A-Za-z]+[0-9]+(?:/[0-9]+)*"
+_PORT_RANGE = _PORT + r"-[0-9]+"
+_SUBIF      = _PORT + r"\.[0-9]+"
+_SVI        = r"[Vv]lan ?[0-9]{1,4}"
+
+# ============================================================
 # INTERFACE ROLES
 # ============================================================
 
@@ -20,37 +38,45 @@ INDENT = 1
 
 INTERFACE_ROLES = {
 
-    "access": {
-        "label": "Access port",
-        "device_types": ["switch"],
-        "ask_fields": ["description", "access_vlan", "shutdown"],
-        "render_fields": ["description", "access_vlan", "shutdown"]
-    },
+"access": {
+    "label": "Access port",
+    "device_types": ["switch"],
+    "name_pattern": f"{_PORT}|{_PORT_RANGE}",
+    "name_hint": "g0/1 o fa0/1-12",
+    "ask_fields": ["description", "access_vlan", "shutdown"],
+    "render_fields": ["description", "access_vlan", "shutdown"]
+},
 
-    "trunk": {
-        "label": "Trunk port",
-        "device_types": ["switch"],
-        "ask_fields": ["description", "trunk_allowed", "trunk_native", "shutdown"],
-        "render_fields": ["description", "trunk_allowed", "trunk_native", "shutdown"]
-    },
+"trunk": {
+    "label": "Trunk port",
+    "device_types": ["switch"],
+    "name_pattern": f"{_PORT}|{_PORT_RANGE}",
+    "name_hint": "g0/1 o fa0/1-12",
+    "ask_fields": ["description", "trunk_allowed", "trunk_native", "shutdown"],
+    "render_fields": ["description", "trunk_allowed", "trunk_native", "shutdown"]
+},
 
-    "svi": {
-        "label": "SVI (management)",
-        "device_types": ["switch"],
-        "ask_fields": ["description", "ipv4", "mask_ipv4", "shutdown"],
-        "render_fields": ["description", "ip_address", "shutdown"]
-    },
+"svi": {
+    "label": "SVI (management)",
+    "device_types": ["switch"],
+    "name_pattern": _SVI,
+    "name_hint": "vlan99",
+    "ask_fields": ["description", "ipv4", "mask_ipv4", "shutdown"],
+    "render_fields": ["description", "ip_address", "shutdown"]
+},
 
-    # la encapsulacion va ANTES que la IP: es el orden en que
-    # el IOS las espera, y tenerlo aca hace imposible cruzar
-    # el numero de subinterfaz con el de la VLAN
+# la encapsulacion va ANTES que la IP: es el orden en que
+# el IOS las espera, y tenerlo aca hace imposible cruzar
+# el numero de subinterfaz con el de la VLAN
 
-    "subinterface": {
-        "label": "Subinterface (router-on-a-stick)",
-        "device_types": ["router"],
-        "ask_fields": ["description", "encapsulation", "ipv4", "mask_ipv4"],
-        "render_fields": ["description", "encapsulation", "ip_address"]
-    }
+"subinterface": {
+    "label": "Subinterface (router-on-a-stick)",
+    "device_types": ["router"],
+    "name_pattern": _SUBIF,
+    "name_hint": "g0/0/1.10",
+    "ask_fields": ["description", "encapsulation", "ipv4", "mask_ipv4"],
+    "render_fields": ["description", "encapsulation", "ip_address"]
+}
 }
 
 # ============================================================
@@ -1458,12 +1484,32 @@ def ask_interface(device_type, current=None):
     current_role = current["role"] if current else None
 
     # ----------------------------------------------------
+        # ROLE
+        # ----------------------------------------------------
+        #
+        # Va primero: define contra que patron se valida el
+        # nombre en el paso siguiente.
+
+    role = choose_role(device_type, current_role)
+
+    if role is None:
+
+        if current_role is None:
+            return auxiliar.CANCEL
+
+        role = current_role
+
+    role_def = INTERFACE_ROLES[role]
+
+    # ----------------------------------------------------
     # NAME
     # ----------------------------------------------------
 
     result = auxiliar.validate_interface_name(
-        "Write the interface name (e.g. g0/1 or fa0/1-12)",
-        current_name
+        f"Write the interface name (e.g. {role_def['name_hint']})",
+        current_name,
+        pattern=role_def["name_pattern"],
+        hint=role_def["name_hint"]
     )
 
     if result is auxiliar.CANCEL:
@@ -1471,7 +1517,6 @@ def ask_interface(device_type, current=None):
 
     if result is auxiliar.SKIP:
 
-        # interfaz nueva: sin nombre no hay nada que configurar
         if current_name is None:
             return auxiliar.CANCEL
 
@@ -1479,22 +1524,6 @@ def ask_interface(device_type, current=None):
 
     else:
         name = result
-
-    # ----------------------------------------------------
-    # ROLE
-    # ----------------------------------------------------
-
-    role = choose_role(device_type, current_role)
-
-    if role is None:
-
-        # cancelar el rol de una interfaz que ya existe deja
-        # el rol anterior; en una nueva aborta
-
-        if current_role is None:
-            return auxiliar.CANCEL
-
-        role = current_role
 
     # ----------------------------------------------------
     # FIELDS
