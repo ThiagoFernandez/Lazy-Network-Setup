@@ -1,4 +1,5 @@
 import copy
+import re
 import auxiliar
 import pyperclip
 import os
@@ -1218,6 +1219,11 @@ def ask_vlan(current=None):
     # ----------------------------------------------------
     # NAME (opcional)
     # ----------------------------------------------------
+    if vlan_id == "1":
+        return {
+            "id": vlan_id,
+            "name": ""
+        }
 
     result = auxiliar.validate_optional_string(
         FIELD_DEFINITIONS["vlan_name"]["question"],
@@ -1287,6 +1293,11 @@ def vlans_setup(device):
                 print(f"VLAN {vlan['id']} already exists. Edit it instead.")
                 continue
 
+            if find_vlan_by_name(vlan["name"], temp_device["vlans"]):
+                print()
+                print(f"VLAN with name '{vlan['name']}' already exists. Edit it instead.")
+                continue
+
             temp_device["vlans"].append(vlan)
 
         # ----------------------------------------------------
@@ -1323,6 +1334,11 @@ def vlans_setup(device):
             print()
             print(f"{vlan_label(removed)} removed.")
 
+def find_vlan_by_name(name, vlans):
+    for vlan in vlans:
+        if vlan["name"] == name:
+            return True
+    return False
 
 # ============================================================
 # INTERFACES SETUP
@@ -1815,6 +1831,123 @@ def build_interface_commands(interface, device_type):
 
     return commands
 
+# ============================================================
+# LINT RULES
+# ============================================================
+#
+# Cada regla recibe el device y devuelve una lista de strings
+# (vacia si no hay nada que decir). No modifican el device y
+# no hacen I/O: se pueden testear con un device literal.
+#
+# Agregar una regla = escribir la funcion y sumarla a
+# LINT_RULES. El motor no cambia.
+# ============================================================
+
+def device_own_ips(device):
+
+    # Todas las IPs que el dispositivo tiene ASIGNADAS a si
+    # mismo. No incluye gateways ni next-hops, que son IPs de
+    # otros equipos.
+
+    ips = []
+
+    if device.get("ipv4"):
+        ips.append(device["ipv4"])
+
+    for interface in device.get("interfaces") or []:
+        if interface.get("ipv4"):
+            ips.append(interface["ipv4"])
+
+    return ips
+
+
+def check_gateway_is_self(device):
+
+    own = device_own_ips(device)
+
+    warnings = []
+
+    for field_name in ("management_gateway_ipv4", "default_route_ipv4"):
+
+        value = device.get(field_name)
+
+        if value and value in own:
+            warnings.append(
+                f"{field_name} = {value} es una IP del propio dispositivo. "
+                "Deberia ser la IP del router."
+            )
+
+    return warnings
+
+
+def check_duplicate_ips(device):
+
+    own = device_own_ips(device)
+
+    warnings = []
+    seen = set()
+
+    for ip in own:
+
+        if ip in seen:
+            warnings.append(
+                f"la IP {ip} esta asignada mas de una vez en este dispositivo"
+            )
+
+        seen.add(ip)
+
+    return warnings
+
+
+LINT_RULES = [
+    check_gateway_is_self,
+    check_duplicate_ips
+]
+
+
+# ============================================================
+# RUN RULES
+# ============================================================
+#
+# Pura: device -> lista de advertencias. Sin prints.
+# ============================================================
+
+def run_rules(device):
+
+    warnings = []
+
+    for rule in LINT_RULES:
+        warnings.extend(rule(device))
+
+    return warnings
+
+
+# ============================================================
+# LINT DEVICE
+# ============================================================
+#
+# Solo imprime. No bloquea, no pregunta y no modifica el
+# device: el usuario puede tener motivos para ignorar una
+# advertencia.
+# ============================================================
+
+def lint_device(device):
+
+    warnings = run_rules(device)
+
+    if not warnings:
+        return
+
+    print()
+    print("-" * 60)
+    print("WARNINGS (revisar antes de aplicar)")
+    print("-" * 60)
+
+    for warning in warnings:
+        print(f"  ! {warning}")
+
+    print("-" * 60)
+
 
 # ============================================================
 # MODE COMMANDS
@@ -2075,7 +2208,6 @@ def choose_device():
         devices[result - 1]
     )
 
-
 # ============================================================
 # CATEGORIES SETUP
 # ============================================================
@@ -2161,6 +2293,11 @@ def categories_setup():
             device
         )
 
+        # ----------------------------------------------------
+        # LINT DEVICE
+        # ----------------------------------------------------
+
+        lint_device(device)
 
         # ----------------------------------------------------
         # PRINT PLAN
@@ -2241,6 +2378,11 @@ def guided_setup():
         device
     )
 
+    # ----------------------------------------------------
+    # LINT DEVICE
+    # ----------------------------------------------------
+
+    lint_device(device)
 
     # ----------------------------------------------------
     # PRINT PLAN
