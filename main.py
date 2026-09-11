@@ -1219,10 +1219,10 @@ def ask_vlan(current=None):
     # ----------------------------------------------------
     # NAME (opcional)
     # ----------------------------------------------------
-    if vlan_id == "1":
+    if vlan_id == 1:
         return {
             "id": vlan_id,
-            "name": ""
+            "name": None
         }
 
     result = auxiliar.validate_optional_string(
@@ -1293,7 +1293,7 @@ def vlans_setup(device):
                 print(f"VLAN {vlan['id']} already exists. Edit it instead.")
                 continue
 
-            if find_vlan_by_name(vlan["name"], temp_device["vlans"]):
+            if find_vlan_by_name(temp_device["vlans"], vlan["name"]) is not None:
                 print()
                 print(f"VLAN with name '{vlan['name']}' already exists. Edit it instead.")
                 continue
@@ -1316,6 +1316,13 @@ def vlans_setup(device):
             if vlan is auxiliar.CANCEL:
                 continue
 
+            duplicate = find_vlan_by_name(temp_device["vlans"], vlan["name"])
+
+            if duplicate is not None and duplicate != index:
+                print()
+                print(f"VLAN name '{vlan['name']}' already in use.")
+                continue
+
             temp_device["vlans"][index] = vlan
 
         # ----------------------------------------------------
@@ -1334,11 +1341,16 @@ def vlans_setup(device):
             print()
             print(f"{vlan_label(removed)} removed.")
 
-def find_vlan_by_name(name, vlans):
-    for vlan in vlans:
+def find_vlan_by_name(vlans, name):
+
+    if not name:
+        return None
+
+    for i, vlan in enumerate(vlans):
         if vlan["name"] == name:
-            return True
-    return False
+            return i
+
+    return None
 
 # ============================================================
 # INTERFACES SETUP
